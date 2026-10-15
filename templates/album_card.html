@@ -7,6 +7,24 @@
          loading="{% if loop.index0 < 4 %}eager{% else %}lazy{% endif %}" decoding="async" alt="">
   </span>
   {% endif %}
+  {# A few photos from through the album; app.js flips the cover through
+     them under the pointer. #}
+  {% if !album.strip.is_empty() %}
+  <span class="album-strip">
+    {% for photo in album.strip %}
+    <span class="album-strip-photo ph" style="background-color: {{ photo.background }}" data-thumbhash="{{ photo.thumbhash }}"
+          data-cover-src="{{ photo.view_url }}" data-cover-srcset="{{ photo.cover_srcset }}">
+      <img src="{{ photo.thumb_url }}" srcset="{{ photo.thumb_srcset }}" sizes="(max-width: 720px) 25vw, 13vw"
+           width="{{ photo.thumb_width }}" height="{{ photo.thumb_height }}"
+           loading="lazy" decoding="async" alt="">
+    </span>
+    {% endfor %}
+  </span>
+  {% endif %}
+  {% if album.palette.len() > 1 %}
+  <span class="album-palette" aria-hidden="true">{% for colour in album.palette %}<span style="background-color: {{ colour }}"></span>{% endfor %}</span>
+  {% endif %}
   <span class="album-card-title">{{ album.title }}</span>
   <span class="album-card-summary">{{ album.summary }}</span>
+  {% if !album.gear.is_empty() %}<span class="album-card-gear">{{ album.gear }}</span>{% endif %}
 </a>

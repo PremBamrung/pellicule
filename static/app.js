@@ -229,6 +229,63 @@ if (hero) {
   if (rows.length) load(rows[0]).then(schedule);
 }
 
+// ---- album cards: the pointer flips the cover through the strip -----------
+
+// Across the cover, left to right: the cover, then each strip photo; over
+// the strip, the photo pointed at. Larger versions load when the pointer
+// arrives, and the cover only switches to one that is decoded.
+if (matchMedia("(hover: hover) and (pointer: fine)").matches) {
+  for (const card of document.querySelectorAll(".album-card")) {
+    const cover = card.querySelector(".album-cover img");
+    const strip = [...card.querySelectorAll(".album-strip-photo")];
+    if (!cover || !strip.length) continue;
+    const frames = [
+      { src: cover.getAttribute("src"), srcset: cover.getAttribute("srcset"), ready: true },
+      ...strip.map((photo) => ({ src: photo.dataset.coverSrc, srcset: photo.dataset.coverSrcset })),
+    ];
+    let shown = 0;
+    let wanted = 0;
+    let loading = null;
+    const preload = () => {
+      loading ??= frames.slice(1).map((frame, i) => {
+        const img = new Image();
+        img.sizes = cover.sizes;
+        img.srcset = frame.srcset;
+        img.src = frame.src;
+        img.decode().then(() => {
+          frame.ready = true;
+          if (wanted === i + 1) show(i + 1);
+        }, () => {});
+        return img;
+      });
+    };
+    const show = (index) => {
+      wanted = index;
+      if (index === shown || !frames[index].ready) return;
+      shown = index;
+      cover.srcset = frames[index].srcset;
+      cover.src = frames[index].src;
+      card.classList.toggle("is-flipping", index > 0);
+      strip.forEach((photo, i) => photo.classList.toggle("is-shown", i === index - 1));
+    };
+
+    const area = cover.parentElement;
+    area.addEventListener("pointerenter", preload);
+    area.addEventListener("pointermove", (event) => {
+      const box = area.getBoundingClientRect();
+      const at = Math.floor(((event.clientX - box.left) / box.width) * frames.length);
+      show(Math.max(0, Math.min(frames.length - 1, at)));
+    });
+    strip.forEach((photo, i) =>
+      photo.addEventListener("pointerenter", () => {
+        preload();
+        show(i + 1);
+      }),
+    );
+    card.addEventListener("pointerleave", () => show(0));
+  }
+}
+
 // ---- viewer ---------------------------------------------------------------
 
 const photos = document.querySelector(".photos");

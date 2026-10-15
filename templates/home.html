@@ -36,8 +36,11 @@
      from the <a href="/library">Library</a> page. A scan also starts each time Pellicule starts.</p>
 </section>
 {% else %}
-<section class="collection">
-  <p class="stats">{{ stats }}</p>
+<section class="collection" aria-labelledby="collection-title">
+  <header class="collection-head">
+    <h2 class="collection-title" id="collection-title">{% if albums.is_empty() %}Photographs{% else %}Albums{% endif %}</h2>
+    <p class="stats">{{ stats }}</p>
+  </header>
   {% if !albums.is_empty() %}
   <div class="albums">
     {% for album in albums %}{% include "album_card.html" %}{% endfor %}

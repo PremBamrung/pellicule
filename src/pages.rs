@@ -23,7 +23,7 @@ pub struct HomePage<'a> {
     pub layout: &'a Layout,
     /// Random photos, shown whole in rows that take turns.
     pub heroes: Vec<Hero>,
-    /// "2 albums, 200 photographs, 2023–2025"
+    /// "2 albums · 200 photographs · 2023–2025"
     pub stats: String,
     pub albums: Vec<AlbumCard>,
     pub tiles: Vec<Tile>,
@@ -113,10 +113,23 @@ pub struct Crumb {
 pub struct AlbumCard {
     pub href: String,
     pub title: String,
+    /// "3 albums · 100 photographs · 6–14 Oct 2023 · 5 days"
     pub summary: String,
+    /// "X-T3 · X-E3 · 35–84mm" (35mm-equivalent range); empty without EXIF.
+    pub gear: String,
     pub cover: Option<Tile>,
+    /// A few photos spread through the album, after the cover; empty for
+    /// small albums.
+    pub strip: Vec<Tile>,
+    /// Average colours sampled through the album in order ("#a0b1c2").
+    pub palette: Vec<String>,
     latest: Option<String>,
 }
+
+/// Photos in a card's strip; albums with fewer others show none.
+const STRIP_LEN: usize = 4;
+/// Colours in a card's band.
+const PALETTE_LEN: usize = 12;
 
 pub struct Tile {
     /// Content key: names the derivatives, and `#p=<key>` links to the tile.
@@ -215,18 +228,14 @@ fn library_stats(conn: &Connection) -> Result<String> {
         return Ok(String::new());
     }
     let mut stats = format!(
-        "{albums} {}, {photos} {}",
-        if albums == 1 { "album" } else { "albums" },
-        if photos == 1 {
-            "photograph"
-        } else {
-            "photographs"
-        },
+        "{} · {}",
+        plural(albums, "album", "albums"),
+        plural(photos, "photograph", "photographs"),
     );
     let year = |v: Option<String>| v.and_then(|v| v.get(..4).map(str::to_owned));
     match (year(first), year(last)) {
-        (Some(a), Some(b)) if a != b => stats.push_str(&format!(", {a}–{b}")),
-        (Some(a), _) => stats.push_str(&format!(", {a}")),
+        (Some(a), Some(b)) if a != b => stats.push_str(&format!(" · {a}–{b}")),
+        (Some(a), _) => stats.push_str(&format!(" · {a}")),
         _ => {}
     }
     Ok(stats)
@@ -394,22 +403,143 @@ fn child_cards(conn: &Connection, parent_id: i64) -> Result<Vec<AlbumCard>> {
 
     let mut cards = Vec::new();
     for child in children {
-        let (count, first, last) = album_stats(conn, &child.rel_path)?;
-        if count == 0 {
-            continue;
+        if let Some(card) = album_card(conn, child)? {
+            cards.push(card);
         }
-        let cover = cover(conn, &child.rel_path)?;
-        cards.push(AlbumCard {
-            href: album_href(&child.rel_path),
-            title: child.name,
-            summary: summary(count, first.as_deref(), last.as_deref()),
-            cover,
-            latest: last,
-        });
     }
     // Most recent first, like a portfolio. ISO timestamps sort as text.
     cards.sort_by(|a, b| b.latest.cmp(&a.latest));
     Ok(cards)
+}
+
+/// `None` when nothing below the album can be shown.
+fn album_card(conn: &Connection, album: AlbumRow) -> Result<Option<AlbumCard>> {
+    // Every photo below the album in order: the strip and the colours are
+    // spread through it.
+    let mut stmt = conn.prepare(&format!(
+        "SELECT m.id, m.content_key, m.avg_rgb FROM media m JOIN album a ON a.id = m.album_id
+         WHERE {IN_SUBTREE}
+         ORDER BY m.taken_at IS NULL, m.taken_at, a.rel_path, m.file_name"
+    ))?;
+    let photos: Vec<(i64, String, Option<u32>)> = stmt
+        .query_map(params![album.rel_path], |r| {
+            Ok((r.get(0)?, r.get(1)?, r.get(2)?))
+        })?
+        .collect::<rusqlite::Result<_>>()?;
+    if photos.is_empty() {
+        return Ok(None);
+    }
+
+    let (count, first, last, days, focal_min, focal_max): CardStats = conn.query_row(
+        &format!(
+            "SELECT count(*), min(m.taken_at), max(m.taken_at),
+                    count(DISTINCT substr(m.taken_at, 1, 10)),
+                    min(coalesce(m.focal_35mm, m.focal_mm)), max(coalesce(m.focal_35mm, m.focal_mm))
+             FROM media m JOIN album a ON a.id = m.album_id WHERE {IN_SUBTREE}"
+        ),
+        params![album.rel_path],
+        |r| {
+            Ok((
+                r.get(0)?,
+                r.get(1)?,
+                r.get(2)?,
+                r.get(3)?,
+                r.get(4)?,
+                r.get(5)?,
+            ))
+        },
+    )?;
+
+    // Most used first.
+    let mut stmt = conn.prepare(&format!(
+        "SELECT m.make, m.model FROM media m JOIN album a ON a.id = m.album_id
+         WHERE {IN_SUBTREE} AND m.model IS NOT NULL
+         GROUP BY m.make, m.model ORDER BY count(*) DESC, m.model LIMIT 3"
+    ))?;
+    let mut gear: Vec<String> = stmt
+        .query_map(params![album.rel_path], |r| {
+            let make: Option<String> = r.get(0)?;
+            let model: String = r.get(1)?;
+            Ok(model_name(make.as_deref(), &model))
+        })?
+        .collect::<rusqlite::Result<_>>()?;
+    gear.dedup();
+    if let (Some(min), Some(max)) = (focal_min, focal_max) {
+        gear.push(focal_span(min, max));
+    }
+
+    let cover = cover(conn, &album.rel_path)?;
+    let others: Vec<i64> = photos
+        .iter()
+        .filter(|(_, key, _)| cover.as_ref().is_none_or(|c| &c.key != key))
+        .map(|(id, _, _)| *id)
+        .collect();
+    let strip = if others.len() >= STRIP_LEN {
+        spread(others.len(), STRIP_LEN)
+            .map(|i| tile_by_id(conn, others[i]))
+            .collect::<Result<_>>()?
+    } else {
+        Vec::new()
+    };
+    let palette = spread(photos.len(), PALETTE_LEN.min(photos.len()))
+        .map(|i| format!("#{:06x}", photos[i].2.unwrap_or(0x30_30_30)))
+        .collect();
+
+    Ok(Some(AlbumCard {
+        href: album_href(&album.rel_path),
+        summary: card_summary(
+            sub_albums(conn, album.id)?,
+            count,
+            first.as_deref(),
+            last.as_deref(),
+            days,
+        ),
+        gear: gear.join(" · "),
+        title: album.name,
+        cover,
+        strip,
+        palette,
+        latest: last,
+    }))
+}
+
+type CardStats = (
+    i64,
+    Option<String>,
+    Option<String>,
+    i64,
+    Option<f64>,
+    Option<f64>,
+);
+
+/// Sub-albums with something to show.
+fn sub_albums(conn: &Connection, album_id: i64) -> Result<usize> {
+    let mut stmt =
+        conn.prepare("SELECT rel_path FROM album WHERE parent_id = ?1 AND missing_since IS NULL")?;
+    let paths: Vec<String> = stmt
+        .query_map(params![album_id], |r| r.get(0))?
+        .collect::<rusqlite::Result<_>>()?;
+    let mut count = 0;
+    for path in paths {
+        if album_stats(conn, &path)?.0 > 0 {
+            count += 1;
+        }
+    }
+    Ok(count)
+}
+
+fn tile_by_id(conn: &Connection, id: i64) -> Result<Tile> {
+    Ok(conn.query_row(
+        &format!("SELECT {MEDIA_COLUMNS} FROM media m WHERE m.id = ?1"),
+        params![id],
+        tile_from_row,
+    )?)
+}
+
+/// `count` positions spread evenly through `len` items, each in the middle
+/// of its share: 4 of 10 gives 1, 3, 6, 8.
+fn spread(len: usize, count: usize) -> impl Iterator<Item = usize> {
+    (0..count).map(move |i| (2 * i + 1) * len / (2 * count))
 }
 
 const MEDIA_COLUMNS: &str = "m.content_key, m.width, m.height, m.avg_rgb, m.make, m.model, m.lens,
@@ -884,6 +1014,76 @@ fn summary(count: i64, first: Option<&str>, last: Option<&str>) -> String {
     }
 }
 
+fn plural(n: impl Into<i64>, one: &str, many: &str) -> String {
+    let n = n.into();
+    format!("{n} {}", if n == 1 { one } else { many })
+}
+
+/// "3 albums · 100 photographs · 6–14 Oct 2023 · 5 days": sub-albums only
+/// when there are some, days only when photos were taken on several.
+fn card_summary(
+    albums: usize,
+    count: i64,
+    first: Option<&str>,
+    last: Option<&str>,
+    days: i64,
+) -> String {
+    let mut parts = Vec::new();
+    if albums > 0 {
+        parts.push(plural(albums as i64, "album", "albums"));
+    }
+    parts.push(plural(count, "photograph", "photographs"));
+    if let Some(span) = day_span(first, last) {
+        parts.push(span);
+    }
+    if days > 1 {
+        parts.push(plural(days, "day", "days"));
+    }
+    parts.join(" · ")
+}
+
+/// "6 Oct 2023", "6–14 Oct 2023", "28 Sep – 3 Oct 2023",
+/// "30 Dec 2023 – 2 Jan 2024".
+fn day_span(first: Option<&str>, last: Option<&str>) -> Option<String> {
+    let first = parse(first?)?.date();
+    let last = last.and_then(parse).map_or(first, |dt| dt.date());
+    let full = |d: chrono::NaiveDate| d.format("%-d %b %Y").to_string();
+    Some(if first == last {
+        full(first)
+    } else if first.format("%Y-%m").to_string() == last.format("%Y-%m").to_string() {
+        format!("{}–{}", first.format("%-d"), full(last))
+    } else if first.format("%Y").to_string() == last.format("%Y").to_string() {
+        format!("{} – {}", first.format("%-d %b"), full(last))
+    } else {
+        format!("{} – {}", full(first), full(last))
+    })
+}
+
+/// "35–84mm", or "35mm" for a single focal length.
+fn focal_span(min: f64, max: f64) -> String {
+    let (min, max) = (min.round() as i64, max.round() as i64);
+    if min == max {
+        format!("{min}mm")
+    } else {
+        format!("{min}–{max}mm")
+    }
+}
+
+/// "X-T3", "EOS R6": the model without the maker's name, for short lists.
+fn model_name(make: Option<&str>, model: &str) -> String {
+    let model = model.trim();
+    match make.map(str::trim) {
+        Some(make)
+            if model
+                .get(..make.len())
+                .is_some_and(|start| start.eq_ignore_ascii_case(make)) =>
+        {
+            model[make.len()..].trim().to_string()
+        }
+        _ => model.to_string(),
+    }
+}
+
 fn parse(value: &str) -> Option<NaiveDateTime> {
     NaiveDateTime::parse_from_str(value, "%Y-%m-%dT%H:%M:%S").ok()
 }
@@ -1055,5 +1255,53 @@ mod tests {
             "December 2023 – January 2024"
         );
         assert_eq!(summary(1, None, None), "1 photograph");
+    }
+
+    #[test]
+    fn card_summaries() {
+        let span = |a: &str, b: &str| day_span(Some(a), Some(b)).unwrap();
+        assert_eq!(
+            span("2023-10-06T09:00:00", "2023-10-06T21:00:00"),
+            "6 Oct 2023"
+        );
+        assert_eq!(
+            span("2023-10-06T09:00:00", "2023-10-14T09:00:00"),
+            "6–14 Oct 2023"
+        );
+        assert_eq!(
+            span("2023-09-28T09:00:00", "2023-10-03T09:00:00"),
+            "28 Sep – 3 Oct 2023"
+        );
+        assert_eq!(
+            span("2023-12-30T09:00:00", "2024-01-02T09:00:00"),
+            "30 Dec 2023 – 2 Jan 2024"
+        );
+        assert_eq!(
+            card_summary(
+                3,
+                100,
+                Some("2023-10-06T09:00:00"),
+                Some("2023-10-14T09:00:00"),
+                5
+            ),
+            "3 albums · 100 photographs · 6–14 Oct 2023 · 5 days"
+        );
+        assert_eq!(card_summary(0, 1, None, None, 0), "1 photograph");
+    }
+
+    #[test]
+    fn card_gear() {
+        assert_eq!(model_name(Some("FUJIFILM"), "X-T3"), "X-T3");
+        assert_eq!(model_name(Some("Canon"), "Canon EOS R6"), "EOS R6");
+        assert_eq!(model_name(None, "X-E3"), "X-E3");
+        assert_eq!(focal_span(35.0, 84.4), "35–84mm");
+        assert_eq!(focal_span(35.0, 35.2), "35mm");
+    }
+
+    #[test]
+    fn spread_takes_the_middle_of_each_share() {
+        assert_eq!(spread(10, 4).collect::<Vec<_>>(), [1, 3, 6, 8]);
+        assert_eq!(spread(4, 4).collect::<Vec<_>>(), [0, 1, 2, 3]);
+        assert_eq!(spread(1, 1).collect::<Vec<_>>(), [0]);
     }
 }

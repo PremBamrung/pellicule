@@ -158,13 +158,15 @@ main { padding-bottom: 120px; }
   width: 100%;
   height: 100%;
 }
-/* Rows are stacked and bottom-aligned; only the current one is visible
-   and clickable. */
+/* Rows are stacked, bottom-aligned and centred (a row of a few landscapes
+   can be narrower than the page); only the current one is visible and
+   clickable. */
 .hero-row {
   position: absolute;
   inset: 0;
   display: flex;
   align-items: flex-end;
+  justify-content: center;
   gap: var(--hero-gap);
   opacity: 0;
   pointer-events: none;
@@ -219,11 +221,30 @@ main { padding-bottom: 120px; }
 .hero-dots button:hover::before { opacity: 0.7; }
 .hero-dots button[aria-current="true"]::before { background: var(--ink); opacity: 1; }
 
-.collection { padding-top: clamp(48px, 6vw, 88px); }
+/* A hairline and a heading close the photos above and open the albums. */
+.collection { padding-top: clamp(56px, 7vw, 104px); }
+
+.collection-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 4px 24px;
+  margin: 0 var(--gutter) clamp(28px, 3vw, 44px);
+  padding-top: clamp(20px, 2vw, 28px);
+  border-top: 1px solid var(--rule);
+}
+
+.collection-title {
+  margin: 0;
+  font-size: clamp(32px, 4vw, 56px);
+  font-weight: 500;
+  line-height: 1.05;
+  letter-spacing: -0.04em;
+}
 
 .stats {
   margin: 0;
-  padding: 0 var(--gutter) 28px;
   color: var(--muted);
 }
 
@@ -261,21 +282,52 @@ main { padding-bottom: 120px; }
 }
 .album-card:hover .album-cover img { scale: 1.025; }
 
+/* Four photos from through the album, under the cover. While the pointer
+   flips the cover through them, the one shown stays lit. */
+.album-strip {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 4px;
+  margin-top: 4px;
+}
+.album-strip-photo {
+  display: block;
+  aspect-ratio: 3 / 2;
+  overflow: hidden;
+}
+.album-strip-photo img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.album-strip-photo { transition: opacity 250ms ease; }
+.album-card.is-flipping .album-strip-photo:not(.is-shown) { opacity: 0.3; }
+
+/* The album's colours in order, like the edge of a contact sheet. */
+.album-palette {
+  display: flex;
+  height: 6px;
+  margin-top: 12px;
+}
+.album-palette span { flex: 1; }
+
 .album-card-title {
   display: block;
-  margin-top: 18px;
+  margin-top: 16px;
   font-size: clamp(26px, 2.6vw, 36px);
   font-weight: 500;
   line-height: 1.05;
   letter-spacing: -0.04em;
 }
 
-.album-card-summary {
+.album-card-summary,
+.album-card-gear {
   display: block;
   margin-top: 8px;
   color: var(--muted);
   font-size: 14px;
 }
+.album-card-gear { margin-top: 2px; }
 
 /* ---- album page ------------------------------------------------------ */
 
@@ -705,5 +757,5 @@ html .pswp--zoomed-in .pswp__label { display: block; opacity: 0; }
 
 @media (prefers-reduced-motion: reduce) {
   @view-transition { navigation: none; }
-  .album-cover img, .js .ph img, .hero-slide { transition: none; }
+  .album-cover img, .js .ph img, .album-strip-photo, .hero-slide { transition: none; }
 }

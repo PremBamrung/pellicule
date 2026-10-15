@@ -39,6 +39,34 @@ No JS virtualization below ~2k items: native `loading="lazy"` plus
 `content-visibility: auto` on row blocks. The first image gets
 `fetchpriority="high"`.
 
+## Home and album cards
+
+The home page opens on rows of whole, uncropped photos picked at random,
+taking turns (a row narrower than the page is centred). A hairline and an
+**Albums** heading, with the library stats on the same line, close the photos
+and open the albums.
+
+Each album card, the same on the home page and for sub-albums:
+
+- **Cover**: the first landscape photo (portraits crop badly in 3:2).
+- **Strip**: four photos spread evenly through the album's timeline after
+  the cover (beginning, middle, end of a trip); the same on every visit.
+  Albums with fewer than four other photos show none.
+- **Colour band**: twelve average colours sampled through the album in
+  order, from the colour already stored per photo. Each album gets a
+  fingerprint at no extra cost.
+- **Summary**: `3 albums · 100 photographs · 6–14 Oct 2023 · 5 days`.
+  Sub-albums only when there are some; days are distinct shooting days,
+  shown when there are several.
+- **Gear**: `X-T3 · X-E3 · 35–84mm`: the three most used camera models,
+  then the 35mm-equivalent focal range.
+
+With a mouse, moving across the cover flips it through the cover and the
+strip photos (left to right), and pointing at a strip photo shows it; the
+other strip photos dim. Larger versions load when the pointer arrives and
+the cover only switches to a decoded one, so it never flashes. Touch screens
+keep the plain card.
+
 ## Filters
 
 Every album with photos has the same four menus, in the same order: **Day**,

@@ -12,7 +12,7 @@ X-T3/X-E3 JPEGs) and is ready to be tried on the NAS with Docker Compose.
 |---|---|
 | Scan & index | ✅ incremental, content-keyed, crash/unmount-safe |
 | Derivatives | ✅ 4 WebP sizes at scan time, ThumbHash, average colour |
-| Browsing | ✅ home photo, album covers, justified grid, day sections, viewer |
+| Browsing | ✅ home photos, album cards (strip, colours, dates, gear), justified grid, day sections, viewer |
 | Filters | ✅ day, camera, lens, focal range (in the browser, URL state) |
 | Library page | ✅ rescan / rebuild / cancel, live progress, history, failures |
 | Look | ✅ white by default + dark toggle, Geist, blur-up placeholders, transitions |
@@ -52,6 +52,15 @@ X-T3/X-E3 JPEGs) and is ready to be tried on the NAS with Docker Compose.
 - Home photos: six random photos crossfading, each linking to its place in
   the album (`/a/<album>#p=<key>`); replaced by rows of photos in pass 4.
 
+### Frontend pass 5
+- Home: a hairline and an "Albums" heading (stats on the same line) between
+  the photos and the albums; a row of photos narrower than the page is
+  centred.
+- Album cards: a strip of four photos spread through the album, a band of
+  the album's colours, date range and shooting days, sub-album count,
+  camera models and focal range; the pointer flips the cover through the
+  strip.
+
 ### Frontend pass 4
 - Home: rows of whole, uncropped photos (portraits too) filling the width,
   crossfading as a row; larger wordmark (28–44 px).
@@ -85,6 +94,7 @@ X-T3/X-E3 JPEGs) and is ready to be tried on the NAS with Docker Compose.
 - Fujifilm MakerNote parser (film simulation, grain, colour chrome, DR, WB
   shift, tone, clarity…) with golden tests against exiftool output.
 - Recipe card in the viewer (`i`), film simulation filter.
+- Film simulations on album cards ("Classic Chrome · Acros").
 
 ### M6 — Sharing (public listener)
 - Share tokens (password, expiry), managed from the Library page.
