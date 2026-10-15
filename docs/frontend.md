@@ -41,9 +41,10 @@ No JS virtualization below ~2k items: native `loading="lazy"` plus
 
 ## Filters
 
-Album pages offer up to four menus under the title: **Day**, **Camera**,
-**Lens** and **Focal length**. A menu only appears when the album has at least
-two values for it.
+Every album with photos has the same four menus, in the same order: **Day**,
+**Camera**, **Lens** and **Focal length**. A menu with a single value still
+opens and shows it, with its count, as information (its checkbox is disabled:
+ticking it would change nothing); one with no value says "Not recorded".
 
 - Days read like "Sat 7 Oct" (with the year when the album spans several).
 - Focal length uses 35mm-equivalent ranges, since zooms record values like

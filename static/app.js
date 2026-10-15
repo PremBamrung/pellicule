@@ -562,7 +562,8 @@ if (filters && photos) {
       for (const input of group.querySelectorAll("input")) {
         const n = counts.get(input.value) ?? 0;
         input.closest("label").querySelector(".count").textContent = n;
-        input.disabled = n === 0 && !input.checked;
+        // A single value is information, not a choice.
+        input.disabled = group.classList.contains("single") || (n === 0 && !input.checked);
       }
     }
     empty.hidden = shown > 0;

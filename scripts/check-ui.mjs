@@ -129,6 +129,17 @@ try {
     await shot("landing");
   }
 
+  // Every album with photos has the same four menus; a menu's only value
+  // is shown, not offered.
+  for (const href of hrefs) {
+    await go(href);
+    if (!(await ev(`document.querySelectorAll("a.tile").length`))) continue;
+    const menus = await ev(`[...document.querySelectorAll(".filter")].map((f) => f.dataset.filter).join(",")`);
+    check(`four menus on ${href}`, menus === "day,camera,lens,focal", menus);
+    const single = await ev(`[...document.querySelectorAll(".filter.single input")].every((i) => i.disabled)`);
+    check(`single values are not choices on ${href}`, single);
+  }
+
   // Prefer an album with several days, so filters and day sections apply.
   let albumHref = hrefs[0];
   for (const href of hrefs) {

@@ -537,8 +537,13 @@ fn focal_range(equivalent_mm: f64) -> (&'static str, &'static str) {
         .expect("last range is unbounded")
 }
 
-/// Menus only appear when they offer a real choice (two values or more).
+/// The same four menus on every album with photos, in the same order. One
+/// with a single value shows it (as information, not a choice); one with
+/// none says so.
 fn filters(tiles: &[Tile]) -> Vec<FilterGroup> {
+    if tiles.is_empty() {
+        return Vec::new();
+    }
     fn counted<'a>(values: impl Iterator<Item = &'a str>) -> Vec<(String, usize)> {
         let mut counts = std::collections::BTreeMap::<&str, usize>::new();
         for value in values.filter(|v| !v.is_empty()) {
@@ -621,9 +626,7 @@ fn filters(tiles: &[Tile]) -> Vec<FilterGroup> {
             options: focal,
         },
     ]
-    .into_iter()
-    .filter(|group| group.options.len() >= 2)
-    .collect()
+    .into()
 }
 
 /// "Fujifilm X-T3, XF56mmF1.2 R".

@@ -23,10 +23,11 @@
     {% if !filters.is_empty() %}
     <div class="filters" hidden>
       {% for group in filters %}
-      <details class="filter" data-filter="{{ group.key }}">
+      <details class="filter{% if group.options.len() == 1 %} single{% endif %}" data-filter="{{ group.key }}">
         <summary data-label="{{ group.label }}">{{ group.label }}</summary>
         <fieldset>
           <legend class="visually-hidden">{{ group.label }}</legend>
+          {% if group.options.is_empty() %}<p class="filter-none">Not recorded</p>{% endif %}
           {% for option in group.options %}
           <label>
             <input type="checkbox" name="{{ group.key }}" value="{{ option.value }}">

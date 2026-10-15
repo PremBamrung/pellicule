@@ -433,6 +433,9 @@ main { padding-bottom: 120px; }
 .filter .count { color: var(--muted); font-variant-numeric: tabular-nums; }
 .filter label:has(input:disabled) { opacity: 0.4; cursor: default; }
 .filter label:has(input:disabled):hover { background: none; }
+/* A menu's only value reads as information: full contrast, inert. */
+.filter.single label:has(input:disabled) { opacity: 1; }
+.filter-none { margin: 0; padding: 6px 14px; color: var(--muted); }
 
 .filter-status {
   display: flex;
