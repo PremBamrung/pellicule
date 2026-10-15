@@ -30,9 +30,10 @@ X-T3/X-E3 JPEGs) and is ready to be tried on the NAS with Docker Compose.
 
 ### M1–M3 thin slice — browse the library
 - SQLite index (albums, media, standard EXIF), incremental scan with fast-key
-  skip, partial-BLAKE3 content keys, empty-root guard, missing files marked.
-- libvips: all four WebP variants at scan time (HDD-friendly), ThumbHash +
-  average colour.
+  skip, whole-file BLAKE3 content keys, empty-root guard, missing files marked.
+- libvips: all four WebP variants at scan time (HDD-friendly), converted to
+  sRGB, ThumbHash + average colour. Fixture tests (orientation, wide gamut,
+  alpha, no upscale) pass on libvips 8.16 and 8.18.
 - Pages: home, album (sub-albums + justified grid), PhotoSwipe viewer (4096
   only on zoom, museum-style label), background scan when `serve` starts.
 
@@ -82,8 +83,18 @@ X-T3/X-E3 JPEGs) and is ready to be tried on the NAS with Docker Compose.
   transcoding only when required, HDR tone-mapping; range requests.
 
 ### Hardening
-- Directory-mtime short-circuit, garbage collection of stale derivatives.
-- Colour edge cases (Fuji Adobe RGB without ICC), startup format probe.
+- Directory-mtime short-circuit, garbage collection of stale derivatives
+  (dry run and grace period first; the cache only grows today).
+- Cancel a scan during the directory walk, not only between files.
+- Integration tests on a fixture library: scan → SQLite → page → derivative,
+  rename / change / remove + rescan, empty root, cancel, route checks.
+- CI: `cargo fmt --check`, `clippy -D warnings`, tests, Docker build +
+  `/healthz` smoke test.
+- Docs: label what's planned vs implemented in architecture / sharing / exif.
+- Scale, only if NAS measurements call for it: batch the walk transaction,
+  DB access off a single mutex, `ORDER BY random()` for the home photo.
+- Colour: keep wide gamut as Display-P3, Fuji Adobe RGB without ICC, startup
+  format probe.
 - Gzip/brotli for HTML (album pages are ~4 KB per photo before compression).
 
 ## Later / maybe

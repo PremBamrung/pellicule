@@ -14,7 +14,8 @@ services:
       # Uncomment to override the bundled config:
       # - ./pellicule.toml:/config/pellicule.toml:ro
     ports:
-      # Full gallery: LAN and tailnet.
+      # Full gallery: LAN and tailnet. No login: never port-forward it.
+      # Tailnet only: "<nas tailnet IP>:${PRIVATE_PORT:-8080}:8080".
       - "${PRIVATE_PORT:-8080}:8080"
       # Share links only. Bound to the host's loopback so the only way in from
       # outside is `tailscale funnel` running on the host.

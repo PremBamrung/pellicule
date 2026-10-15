@@ -78,6 +78,13 @@ sudo tailscale funnel --bg 8081    # https://<nas>.<tailnet>.ts.net → 127.0.0.
 tailscale funnel status
 ```
 
+**The private port has no login.** Anyone who can reach `:8080` sees the
+whole gallery and can start or cancel scans; the trust boundary is the home
+LAN and the tailnet. Never port-forward it on the router or run it on a
+network you don't trust (to restrict it to the tailnet, publish it on the
+NAS's tailnet IP in `compose.yaml`, or bind it to loopback and use
+`tailscale serve`). Only the public listener is meant for the internet.
+
 Because the public port is published on loopback only, nothing on the LAN can
 reach it directly, and the public listener itself only routes `/s/<token>/…`.
 Optionally, `tailscale serve` can give the private side HTTPS on the tailnet

@@ -71,7 +71,9 @@ sudo tailscale funnel --bg 8081   # public share links
 ```
 
 Private gallery on `http://<nas>:8080` (LAN / tailnet); scans are started and
-followed from its **Library** page. See [deployment](docs/deployment.md).
+followed from its **Library** page. The private side has **no login**: the
+LAN / tailnet is the trust boundary, so never port-forward it. See
+[deployment](docs/deployment.md).
 
 Configuration (`docker/pellicule.toml` in the container, `pellicule.toml` locally):
 
@@ -81,7 +83,7 @@ root  = "/photos"               # mounted read-only
 cache = "/var/lib/pellicule"    # previews, videos, sqlite
 
 [server]
-private_addr = "0.0.0.0:8080"   # reachable on LAN / tailnet
+private_addr = "0.0.0.0:8080"   # reachable on LAN / tailnet, no login
 public_addr  = "127.0.0.1:8081" # exposed with `tailscale funnel 8081`
 ```
 

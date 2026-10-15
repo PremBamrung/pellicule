@@ -33,14 +33,14 @@ a cache, and **serve** that cache over two HTTP listeners.
 
 ## Data flow
 
-1. **Scan** walks the library (respecting [conventions](conventions.md)),
-   skipping directories whose mtime is unchanged, and compares each file's fast
-   key `(relative_path, size, mtime)` with the DB. It aborts if the root is
-   empty or unmounted.
-2. New/changed files get a content key (partial BLAKE3), metadata (EXIF,
+1. **Scan** walks the library (respecting [conventions](conventions.md)) and
+   compares each file's fast key `(relative_path, size, mtime)` with the DB.
+   It aborts if the root is empty or unmounted. Skipping directories whose
+   mtime is unchanged is planned.
+2. New/changed files get a content key (BLAKE3 of the file), metadata (EXIF,
    Fujifilm recipe, display dimensions, capture date) and derivative jobs.
-   Disappeared files are marked missing; unreferenced cache entries are
-   garbage-collected later.
+   Disappeared files are marked missing; garbage collection of
+   unreferenced cache entries is planned.
 3. **Derivative workers** (bounded pool, CPU-sized; one global ffmpeg
    semaphore) produce all image variants into the cache and record them in
    SQLite. See [cache.md](cache.md).

@@ -6,12 +6,12 @@ never written to. Deleting the cache is always safe; it only costs a rescan.
 ```
 <cache>/
 ├── pellicule.db            SQLite (WAL): albums, media, exif, derivatives, shares
-├── d/ab/cd/<key>-t.v1.webp grid thumbnail
-├── d/ab/cd/<key>-m.v1.webp grid 2× / cover
-├── d/ab/cd/<key>-l.v1.webp viewer
-├── d/ab/cd/<key>-x.v1.webp zoom
-├── d/ab/cd/<key>-p.v1.webp video poster
-└── d/ab/cd/<key>-v720.v1.mp4  video preview
+├── d/ab/cd/<key>-t.v2.webp grid thumbnail
+├── d/ab/cd/<key>-m.v2.webp grid 2× / cover
+├── d/ab/cd/<key>-l.v2.webp viewer
+├── d/ab/cd/<key>-x.v2.webp zoom
+├── d/ab/cd/<key>-p.v2.webp video poster
+└── d/ab/cd/<key>-v720.v2.mp4  video preview
 ```
 
 ## Identity: two keys
@@ -19,13 +19,16 @@ never written to. Deleting the cache is always safe; it only costs a rescan.
 | Key | Made of | Used for |
 |---|---|---|
 | **Fast key** | `(relative path, size, mtime_ns)` (+ inode on local filesystems) | "Unchanged → skip" without reading the file |
-| **Content key** | BLAKE3 of `size ‖ first 64 KiB ‖ last 64 KiB` | Naming derivatives |
+| **Content key** | BLAKE3 of the whole file | Naming derivatives |
 
-- The content key is computed only for new or changed fast keys. It's cheap even
-  on a NAS (two small reads), and because derivatives are named by content,
-  **moving or renaming a file reuses its cache** and URLs never go stale.
-- The pipeline version (`v1`) is part of every variant name. Changing sizes or
-  quality bumps it; old files are removed by garbage collection.
+- The content key is computed only for new or changed fast keys. Those files
+  are read in full for decoding anyway, so hashing all of it costs little, and
+  two different files can never share derivatives. Because derivatives are
+  named by content, **moving or renaming a file reuses its cache** and URLs
+  never go stale.
+- The pipeline version (`v2`) is part of every variant name. Changing sizes,
+  quality or processing bumps it, and every file is reprocessed on the next
+  scan; old files stay on disk until garbage collection exists (planned).
 
 ## Image variants
 
@@ -60,14 +63,16 @@ roughly 10× faster, which matters on NAS CPUs.
   memory), then `l` is made from `x`, `m` from `l`, `t` from `m`.
 - Metadata is stripped from every derivative (no EXIF, no GPS).
 - **Colour management**:
-  - sRGB sources → sRGB, profile stripped (smallest output).
-  - Wide-gamut sources (Adobe RGB, Display-P3) → Display-P3 with a compact
-    embedded profile (~0.5 KB).
-  - Fujifilm caveat: bodies set to Adobe RGB may write **no ICC profile** and
+  - Implemented: every derivative is sRGB with no profile. A source with an
+    embedded profile (Adobe RGB, Display-P3…) is converted with it; a source
+    without one is taken as sRGB.
+  - **Planned**: wide-gamut sources (Adobe RGB, Display-P3) → Display-P3 with
+    a compact embedded profile (~0.5 KB).
+  - **Planned**, Fujifilm caveat: bodies set to Adobe RGB may write **no ICC profile** and
     signal it only with EXIF `ColorSpace = 0xFFFF` + Interop index `R03`. These
     are imported with a bundled Adobe RGB (1998)-compatible profile; without
     this they render desaturated. To verify on a real sample.
-- **Startup probe**: decode a tiny bundled sample of each format at boot and
+- **Startup probe** (**planned**): decode a tiny bundled sample of each format at boot and
   disable formats the local libvips can't handle.
 
 ## Video
@@ -98,18 +103,19 @@ Done with the `ffmpeg` CLI at scan time, one global ffmpeg semaphore.
 
 ## Rescans & safety
 
-- **Directory-mtime short-circuit**: a directory whose mtime hasn't changed has
+- **Directory-mtime short-circuit** (**planned**; today every scan walks the
+  whole tree): a directory whose mtime hasn't changed has
   had no files added, removed or renamed; only a periodic full stat sweep
   catches in-place edits.
-- Rescans are triggered by: Pellicule starting, a filesystem watcher
+- Rescans are triggered by Pellicule starting and a manual rescan (button /
+  CLI). **Planned**: a filesystem watcher
   (`notify`; it sees changes made on the NAS through the bind mount without
-  polling, so it doesn't wake the disks), a manual rescan (button / CLI), and
-  one nightly full sweep for anything the watcher missed (e.g. edits over SMB).
+  polling, so it doesn't wake the disks) and one nightly full sweep for anything the watcher missed (e.g. edits over SMB).
   No periodic polling.
 - Missing files are marked `missing_since` rather than deleted, and **a scan
   aborts if the library root is empty or unmounted**. A flaky mount must never
   wipe covers, captions or share links.
-- **Garbage collection**: derivatives not referenced by any current media row
+- **Garbage collection** (**planned**; today the cache only grows): derivatives not referenced by any current media row
   (or from an old pipeline version) are deleted after a grace period.
 
 ## HTTP caching
