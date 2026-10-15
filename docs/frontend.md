@@ -65,7 +65,7 @@ slides are preloaded (±1). Back button closes the viewer.
 ## Transitions
 
 Cross-document View Transitions (`@view-transition { navigation: auto; }`):
-the album cover morphs into the album header, a tile into the photo. Names are
+an album card's title morphs into the album page title. Names are
 assigned only to the clicked element (in `pageswap` / `pagereveal`), never to
 hundreds of tiles. Browsers without support simply navigate; reduced-motion is
 respected. Inside the viewer, PhotoSwipe's own zoom animation is used.
@@ -79,9 +79,10 @@ lazily when the viewer opens.
    dark wall is one click away and remembered per browser; the OS setting is
    ignored), generous margins, no borders, no drop shadows, minimal chrome.
    The viewer follows the theme.
-2. **Typography carries the identity.** One typeface, Geist: titles set
-   very large (up to 136 px), weight 500, tight tracking (−0.055em); every
-   other text small (13–15 px) and quiet. No all-caps labels.
+2. **Typography carries the identity.** One typeface, Geist: a bold 26 px
+   wordmark, large titles (up to 92 px), weight 500, tight tracking
+   (−0.05em); every other text small (13–15 px) and quiet. No all-caps
+   labels.
 3. **Nothing jumps.** Every image has width/height and a ThumbHash before it
    loads.
 4. **Right pixels, right time.** `srcset`/`sizes` pick the smallest adequate
@@ -92,12 +93,11 @@ lazily when the viewer opens.
 
 ## Pages
 
-- **Home** — opens on one random landscape photograph, full width (new on
-  each visit) with its album and date underneath; then a line of library
-  stats ("2 albums, 200 photographs, 2023–2025") and the album covers, most
-  recent first.
-- **Album** — a full-width cover banner (the album's first landscape photo
-  until `index.md` can choose one), the title, a summary, then the toolbar:
+- **Home** — opens on one random landscape photograph (new on each visit),
+  framed inside the page margins at about half the screen height, with its
+  album and date underneath; then a line of library stats ("2 albums, 200
+  photographs, 2023–2025") and the album covers, most recent first.
+- **Album** — the title, a summary, then the toolbar:
   filters on the left, grid density **S / M / L** on the right (remembered
   per browser). Albums spanning several days are split into **day sections**
   whose label ("Saturday 7 October") stays at the top, frosted, while its

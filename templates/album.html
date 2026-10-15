@@ -3,14 +3,6 @@
 {% block title %}{{ title }} · Pellicule{% endblock %}
 
 {% block content %}
-{% if let Some(cover) = cover %}
-<div class="album-banner ph" style="background-color: {{ cover.background }}" data-thumbhash="{{ cover.thumbhash }}">
-  <img src="{{ cover.view_url }}" srcset="{{ cover.wide_srcset }}" sizes="100vw"
-       width="{{ cover.zoom_width }}" height="{{ cover.zoom_height }}"
-       fetchpriority="high" decoding="async" alt="">
-</div>
-{% endif %}
-
 <header class="album-head">
   {% if !crumbs.is_empty() %}
   <nav class="crumbs" aria-label="Parent albums">

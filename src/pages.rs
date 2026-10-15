@@ -42,7 +42,6 @@ pub struct AlbumPage<'a> {
     pub title: String,
     pub crumbs: Vec<Crumb>,
     pub summary: String,
-    pub cover: Option<Tile>,
     pub albums: Vec<AlbumCard>,
     /// One section per shooting day when the album spans several days,
     /// otherwise a single unlabelled section.
@@ -251,7 +250,6 @@ pub fn album<'a>(
         title: album.name,
         crumbs,
         summary: summary(count, first.as_deref(), last.as_deref()),
-        cover: cover(conn, &album.rel_path)?,
         albums: child_cards(conn, album.id)?,
         filters: filters(&tiles),
         sections: by_day(tiles),
@@ -305,8 +303,8 @@ fn day_label(day: &str, with_year: bool) -> String {
         .unwrap_or_else(|_| "Undated".to_string())
 }
 
-/// The album's cover: its first landscape photo (portraits crop badly in
-/// wide frames), or its first photo.
+/// The album's cover on album cards: its first landscape photo (portraits
+/// crop badly in 3:2 frames), or its first photo.
 fn cover(conn: &Connection, rel_path: &str) -> Result<Option<Tile>> {
     Ok(conn
         .query_row(

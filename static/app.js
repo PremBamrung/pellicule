@@ -379,19 +379,15 @@ if (scanPanel) {
   poll();
 }
 
-// ---- page transitions: an album cover grows into the album's banner ------
+// ---- page transitions: an album card's title grows into the album title ---
 
 document.addEventListener("click", (event) => {
-  const card = event.target.closest?.(".album-card");
-  if (!card) return;
-  const img = card.querySelector(".album-cover img");
-  const title = card.querySelector(".album-card-title");
-  if (img) img.style.viewTransitionName = "album-cover";
+  const title = event.target.closest?.(".album-card")?.querySelector(".album-card-title");
   if (title) title.style.viewTransitionName = "album-title";
 });
-// Coming back (bfcache), clear the names so they stay unique.
+// Coming back (bfcache), clear the name so it stays unique.
 addEventListener("pageshow", () => {
-  for (const element of document.querySelectorAll(".album-cover img, .album-card-title")) {
-    element.style.viewTransitionName = "";
+  for (const title of document.querySelectorAll(".album-card-title")) {
+    title.style.viewTransitionName = "";
   }
 });

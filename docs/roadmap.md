@@ -12,7 +12,7 @@ X-T3/X-E3 JPEGs) and is ready to be tried on the NAS with Docker Compose.
 |---|---|
 | Scan & index | ✅ incremental, content-keyed, crash/unmount-safe |
 | Derivatives | ✅ 4 WebP sizes at scan time, ThumbHash, average colour |
-| Browsing | ✅ home hero, album covers, justified grid, day sections, viewer |
+| Browsing | ✅ home photo, album covers, justified grid, day sections, viewer |
 | Filters | ✅ day, camera, lens, focal range (in the browser, URL state) |
 | Library page | ✅ rescan / rebuild / cancel, live progress, history, failures |
 | Look | ✅ white by default + dark toggle, Geist, blur-up placeholders, transitions |
@@ -49,9 +49,9 @@ X-T3/X-E3 JPEGs) and is ready to be tried on the NAS with Docker Compose.
 
 ### Frontend pass 2
 - Geist throughout, large tight titles.
-- Home opens on a random full-width photograph, then library stats and album
-  covers; album pages open with a full-width cover banner that the home cover
-  morphs into (View Transitions).
+- Home opens on a random photograph (framed, about half the screen), then
+  library stats and album covers; album titles morph from the home page
+  (View Transitions).
 - Blurred ThumbHash placeholders fading into the photo.
 - Day sections with a sticky, frosted day label.
 - Grid density S / M / L (remembered); viewer slideshow (play button, space).
