@@ -8,7 +8,7 @@ const remember = (key, value) => {
   } catch {}
 };
 
-// `#p=<key>` names a photo to land on. Read before the filters rewrite the URL.
+// `#p=<key>` names a photo to open. Read before the filters rewrite the URL.
 const landing = new URLSearchParams(location.hash.slice(1)).get("p");
 
 // ---- placeholders: blurred ThumbHash behind each photo, then a fade-in ---
@@ -45,91 +45,195 @@ for (const element of document.querySelectorAll(".ph")) {
   }
 }
 
-// ---- home: a few random photos, crossfading -----------------------------
+// ---- home: rows of whole photos, taking turns ------------------------------
 
 const hero = document.querySelector(".hero");
 if (hero) {
-  const slides = [...hero.querySelectorAll(".hero-slide")];
-  const albumLink = hero.querySelector(".hero-caption a");
-  const date = hero.querySelector(".hero-caption > span:not(.hero-dots)");
-  const dots = [...hero.querySelectorAll(".hero-dots button")];
+  const frame = hero.querySelector(".hero-frame");
+  const pool = [...frame.querySelectorAll(".hero-photo")].map((element) => ({
+    element,
+    ar: parseFloat(element.style.getPropertyValue("--ar")) || 1.5,
+  }));
+  const label = hero.querySelector(".hero-label");
+  const dotsBox = hero.querySelector(".hero-dots");
   const still = matchMedia("(prefers-reduced-motion: reduce)");
+  let rows = [];
   let current = 0;
   let timer = null;
   let paused = false;
 
-  // The next photos only start loading when they are about to show.
-  const load = (slide) => {
-    const img = slide.querySelector("img");
-    if (img.dataset.src) {
-      img.srcset = img.dataset.srcset;
-      img.src = img.dataset.src;
-      delete img.dataset.src;
-      delete img.dataset.srcset;
+  // The next photos only start loading when their row is about to show.
+  const load = (row) =>
+    Promise.all(
+      [...row.element.querySelectorAll("img")].map((img) => {
+        if (img.dataset.src) {
+          img.srcset = img.dataset.srcset;
+          img.src = img.dataset.src;
+          delete img.dataset.src;
+          delete img.dataset.srcset;
+        }
+        return img.decode().catch(() => {});
+      }),
+    );
+
+  // Rows of whole photos at one height, close to the target: the order is
+  // random anyway, so each row is the combination of the remaining photos
+  // (up to five) that fills the width at the height nearest the target. A
+  // row that would be too tall is held at the target and left narrower.
+  const split = () => {
+    const width = frame.clientWidth;
+    const target = Math.min(innerHeight * 0.55, width * 0.75);
+    const gap = parseFloat(getComputedStyle(frame).columnGap) || 0;
+    const fit = (count, ratio) => (width - gap * (count - 1)) / ratio;
+    // Share of the frame left empty: above a short row, or beside a narrow one.
+    const waste = (count, ratio) => {
+      const height = fit(count, ratio);
+      return height < target ? 1 - height / target : 1 - (target * ratio + gap * (count - 1)) / width;
+    };
+
+    const groups = [];
+    let left = [...pool];
+    while (left.length && groups.length < 6) {
+      let best = null;
+      const search = (from, items, ratio) => {
+        if (items.length) {
+          const cost = waste(items.length, ratio);
+          if (!best || cost < best.cost) best = { items: [...items], cost };
+          // More photos only make the row lower.
+          if (items.length === 5 || fit(items.length, ratio) < target) return;
+        }
+        for (let i = from; i < left.length; i++) {
+          items.push(left[i]);
+          search(i + 1, items, ratio + left[i].ar);
+          items.pop();
+        }
+      };
+      search(0, [], 0);
+      // Keep going while rows fit well; the first one is always shown.
+      if (groups.length && best.cost > 0.12) break;
+      // In their random order, not the search's.
+      const items = left.filter((photo) => best.items.includes(photo));
+      groups.push({ items, height: Math.min(target, fit(items.length, best.items.reduce((sum, p) => sum + p.ar, 0))) });
+      left = left.filter((photo) => !best.items.includes(photo));
     }
-    return img.decode().catch(() => {});
+    return groups;
+  };
+
+  const layout = () => {
+    for (const row of rows) row.element.remove();
+    const groups = split();
+    for (const photo of pool) photo.element.hidden = !groups.some((g) => g.items.includes(photo));
+    rows = groups.map(({ items, height }) => {
+      const element = document.createElement("div");
+      element.className = "hero-row";
+      for (const { element: photo, ar } of items) {
+        const width = Math.floor(ar * height);
+        photo.style.width = `${width}px`;
+        photo.style.height = `${Math.round(height)}px`;
+        photo.querySelector("img").sizes = `${width}px`;
+        element.append(photo);
+      }
+      frame.append(element);
+      return { element };
+    });
+    frame.style.height = `${Math.round(Math.max(...groups.map((g) => g.height)))}px`;
+
+    dotsBox.replaceChildren(
+      ...rows.map((_, i) => {
+        const dot = document.createElement("button");
+        dot.type = "button";
+        dot.setAttribute("aria-label", `Photos ${i + 1} of ${rows.length}`);
+        dot.addEventListener("click", async () => {
+          await load(rows[i]);
+          show(i);
+        });
+        return dot;
+      }),
+    );
+    dotsBox.hidden = rows.length < 2;
+    show(Math.min(current, rows.length - 1));
   };
 
   const show = (index) => {
-    slides.forEach((slide, i) => {
+    rows.forEach((row, i) => {
       const on = i === index;
-      slide.classList.toggle("is-current", on);
-      slide.toggleAttribute("aria-hidden", !on);
-      if (on) slide.removeAttribute("tabindex");
-      else slide.tabIndex = -1;
+      row.element.classList.toggle("is-current", on);
+      row.element.toggleAttribute("aria-hidden", !on);
+      for (const link of row.element.querySelectorAll("a")) {
+        if (on) link.removeAttribute("tabindex");
+        else link.tabIndex = -1;
+      }
     });
-    dots.forEach((dot, i) => dot.setAttribute("aria-current", String(i === index)));
-    const slide = slides[index];
-    albumLink.textContent = slide.dataset.album;
-    albumLink.href = slide.dataset.albumHref;
-    date.textContent = slide.dataset.date;
+    [...dotsBox.children].forEach((dot, i) => dot.setAttribute("aria-current", String(i === index)));
+    caption(null);
     current = index;
   };
 
-  // Every 6 s, once the next photo is decoded; never while hovered,
-  // focused, in a background tab, or when reduced motion is asked for.
+  // Under the row: the album and date of the photo pointed at or focused.
+  const caption = (photo) => {
+    const [link, date] = label.children;
+    link.textContent = photo?.dataset.album ?? "";
+    link.href = photo?.dataset.albumHref ?? "";
+    date.textContent = photo?.dataset.date ?? "";
+  };
+  frame.addEventListener("pointerover", (event) => caption(event.target.closest(".hero-photo")));
+  frame.addEventListener("focusin", (event) => caption(event.target.closest(".hero-photo")));
+  frame.addEventListener("pointerleave", () => caption(null));
+
+  // Every 8 s, once the next row is decoded; never while hovered, focused,
+  // in a background tab, or when reduced motion is asked for.
   const schedule = () => {
     clearTimeout(timer);
-    if (paused || document.hidden || still.matches) return;
+    if (paused || document.hidden || still.matches || rows.length < 2) return;
     timer = setTimeout(async () => {
-      const next = (current + 1) % slides.length;
-      await load(slides[next]);
+      const next = (current + 1) % rows.length;
+      await load(rows[next]);
       if (!paused && !document.hidden) show(next);
       schedule();
-    }, 6000);
+    }, 8000);
   };
-  const pause = () => {
+  hero.addEventListener("mouseenter", () => {
     paused = true;
     clearTimeout(timer);
-  };
-  const resume = () => {
+  });
+  hero.addEventListener("mouseleave", () => {
     paused = false;
     schedule();
-  };
+  });
+  hero.addEventListener("focusin", () => {
+    paused = true;
+    clearTimeout(timer);
+  });
+  hero.addEventListener("focusout", (event) => {
+    if (hero.contains(event.relatedTarget)) return;
+    paused = false;
+    schedule();
+  });
+  document.addEventListener("visibilitychange", schedule);
 
-  if (slides.length > 1) {
-    hero.addEventListener("mouseenter", pause);
-    hero.addEventListener("mouseleave", resume);
-    hero.addEventListener("focusin", pause);
-    hero.addEventListener("focusout", (event) => {
-      if (!hero.contains(event.relatedTarget)) resume();
-    });
-    document.addEventListener("visibilitychange", schedule);
-    dots.forEach((dot, i) =>
-      dot.addEventListener("click", async () => {
-        await load(slides[i]);
-        show(i);
-      }),
-    );
-    hero.querySelector(".hero-dots").hidden = false;
-    // Start counting once the first photo is in.
-    load(slides[0]).then(schedule);
-  }
+  // Rows depend on the width: split again when it changes.
+  let width = frame.clientWidth;
+  let resizing;
+  addEventListener("resize", () => {
+    clearTimeout(resizing);
+    resizing = setTimeout(() => {
+      if (frame.clientWidth === width) return;
+      width = frame.clientWidth;
+      layout();
+      load(rows[current]);
+    }, 200);
+  });
+
+  layout();
+  // Start counting once the first row is in.
+  if (rows.length) load(rows[0]).then(schedule);
 }
 
 // ---- viewer ---------------------------------------------------------------
 
 const photos = document.querySelector(".photos");
+// Opens the viewer on a tile; set up below when the page has photos.
+let openPhoto = null;
 if (photos) {
   const css = document.createElement("link");
   css.rel = "stylesheet";
@@ -152,8 +256,66 @@ if (photos) {
     padding: narrow
       ? { top: 44, bottom: 84, left: 0, right: 0 }
       : { top: 32, bottom: 104, left: 32, right: 32 },
+    // Focus goes back to the photo last seen, not the one opened (below).
+    returnFocus: false,
   });
 
+  // The open photo is in the URL (`#p=<key>`): Back closes the viewer, and
+  // a reload or a shared link opens it again on the same photo.
+  const keyOf = (pswp) => pswp.currSlide?.data.element?.dataset.key;
+  const urlFor = (key) => `${location.pathname}${location.search}${key ? `#p=${key}` : ""}`;
+  // How this opening got its history entry: "pushed" by a click on a tile,
+  // or the "link" it was opened from (Back then leaves for where it came from).
+  let entry = null;
+  let openedFromLink = false;
+  let closing = false;
+  let lastKey = null;
+
+  lightbox.on("change", () => {
+    lastKey = keyOf(lightbox.pswp);
+    if (entry) {
+      history.replaceState(history.state, "", urlFor(lastKey));
+    } else if (openedFromLink) {
+      entry = "link";
+      history.replaceState(null, "", urlFor(lastKey));
+    } else {
+      entry = "pushed";
+      history.pushState({ viewer: true }, "", urlFor(lastKey));
+    }
+  });
+  addEventListener("popstate", () => {
+    if (!lightbox.pswp || closing) return;
+    entry = null; // the browser already left the viewer's entry
+    lightbox.pswp.close();
+  });
+  lightbox.on("close", () => {
+    closing = true;
+    // Bring the photo into view so the viewer shrinks back onto it.
+    lightbox.pswp.currSlide?.data.element?.scrollIntoView({ block: "center" });
+    if (entry === "pushed") history.back();
+    else if (entry === "link") history.replaceState(null, "", urlFor(null));
+  });
+  lightbox.on("destroy", () => {
+    entry = null;
+    openedFromLink = closing = false;
+    document.querySelector(`a.tile[data-key="${CSS.escape(lastKey ?? "")}"]`)?.focus({ preventScroll: true });
+  });
+
+  openPhoto = (tile) => {
+    const index = [...photos.querySelectorAll("a.tile:not([hidden])")].indexOf(tile);
+    if (index < 0) return;
+    openedFromLink = true;
+    lightbox.loadAndOpen(index);
+  };
+
+  const SHORTCUTS = [
+    ["← →", "Previous, next"],
+    ["Space", "Slideshow"],
+    ["F", "Fullscreen"],
+    ["I", "Show or hide the label"],
+    ["?", "This list"],
+    ["Esc", "Close"],
+  ];
   let labelHidden = false;
   const PLAY = '<svg aria-hidden="true" viewBox="0 0 32 32" width="32" height="32"><path d="M11 9l12 7-12 7z"/></svg>';
   const PAUSE = '<svg aria-hidden="true" viewBox="0 0 32 32" width="32" height="32"><path d="M10 9h4v14h-4zM18 9h4v14h-4z"/></svg>';
@@ -254,6 +416,44 @@ if (photos) {
         },
       });
     }
+
+    // Keyboard shortcuts: "?" or its button (only shown once a mouse is
+    // used, like the arrows) lists them.
+    const panel = document.createElement("div");
+    panel.className = "pswp__help";
+    panel.id = "pswp-help";
+    panel.hidden = true;
+    panel.innerHTML = `<p class="pswp__help-title">Keyboard</p><dl>${SHORTCUTS.map(
+      ([keys, what]) => `<dt>${keys}</dt><dd>${what}</dd>`,
+    ).join("")}</dl>`;
+    const showHelp = (show) => {
+      panel.hidden = !show;
+      helpButton?.setAttribute("aria-expanded", String(show));
+    };
+    let helpButton = null;
+    pswp.ui.registerElement({
+      name: "help",
+      order: 7,
+      isButton: true,
+      title: "Keyboard shortcuts (?)",
+      html: '<svg aria-hidden="true" viewBox="0 0 32 32" width="32" height="32"><text x="16" y="22" text-anchor="middle">?</text></svg>',
+      onInit: (button, pswp) => {
+        helpButton = button;
+        button.setAttribute("aria-controls", panel.id);
+        button.setAttribute("aria-expanded", "false");
+        button.addEventListener("click", () => showHelp(panel.hidden));
+        pswp.element.append(panel);
+        pswp.on("keydown", (event) => {
+          const key = event.originalEvent.key;
+          if (key === "?") showHelp(panel.hidden);
+          else if (key === "Escape" && !panel.hidden) {
+            // Esc first closes the list, then the viewer.
+            event.preventDefault();
+            showHelp(false);
+          }
+        });
+      },
+    });
   });
 
   lightbox.init();
@@ -416,16 +616,53 @@ if (filters && photos) {
   apply();
 }
 
-// ---- landing on a photo: scroll to it and ring it briefly -----------------
+// ---- album bar: frosted once the title has gone, naming the current day --
 
-if (landing && photos) {
+const bar = document.querySelector(".album-bar");
+if (bar) {
+  const head = document.querySelector(".album-head");
+  const day = bar.querySelector(".bar-day");
+  const sections = [...document.querySelectorAll(".day")].filter((s) => s.querySelector(".day-title"));
+  new IntersectionObserver(([entry]) => {
+    bar.classList.toggle("is-stuck", !entry.isIntersecting && entry.boundingClientRect.top < 0);
+  }).observe(head);
+
+  // The current day is the last shown one whose heading is under the bar.
+  if (sections.length > 1) {
+    let queued = false;
+    const update = () => {
+      queued = false;
+      const line = bar.getBoundingClientRect().bottom + 1;
+      let current = null;
+      for (const section of sections) {
+        if (section.hidden) continue;
+        if (section.getBoundingClientRect().top > line) break;
+        current = section;
+      }
+      day.textContent = current?.querySelector(".day-title").textContent ?? "";
+    };
+    addEventListener(
+      "scroll",
+      () => {
+        if (!queued) requestAnimationFrame(update);
+        queued = true;
+      },
+      { passive: true },
+    );
+    update();
+  }
+}
+
+// ---- a link to a photo (`#p=<key>`) opens the viewer on it ---------------
+
+if (landing && openPhoto) {
   const tile = photos.querySelector(`a.tile[data-key="${CSS.escape(landing)}"]`);
   if (tile) {
     // A filter from the URL could hide it.
     if (tile.hidden) document.querySelector(".filter-clear")?.click();
+    // In view first, so the viewer grows out of it and shrinks back onto it.
     tile.scrollIntoView({ block: "center" });
-    tile.classList.add("is-target");
-    tile.addEventListener("animationend", () => tile.classList.remove("is-target"), { once: true });
+    openPhoto(tile);
   }
 }
 

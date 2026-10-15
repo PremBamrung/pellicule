@@ -50,7 +50,19 @@ X-T3/X-E3 JPEGs) and is ready to be tried on the NAS with Docker Compose.
 
 ### Frontend pass 3
 - Home photos: six random photos crossfading, each linking to its place in
-  the album (`/a/<album>#p=<key>`).
+  the album (`/a/<album>#p=<key>`); replaced by rows of photos in pass 4.
+
+### Frontend pass 4
+- Home: rows of whole, uncropped photos (portraits too) filling the width,
+  crossfading as a row; larger wordmark (28–44 px).
+- Album bar: the toolbar stays at the top once the title has gone, with the
+  wordmark, album and current day; day headings no longer stick.
+- Viewer: photo permalinks (`#p=<key>`, reload and shared links open it),
+  Back closes it, focus returns to the photo, label hidden while zoomed,
+  `?` lists the keys; named photo links for screen readers.
+- Library: consecutive scans with no changes fold into one row; two-line
+  rows on phones.
+- Brotli / gzip for pages, CSS and JS; album pages prefetched on hover.
 
 ### Frontend pass 2
 - Geist throughout, large tight titles.
@@ -58,7 +70,8 @@ X-T3/X-E3 JPEGs) and is ready to be tried on the NAS with Docker Compose.
   library stats and album covers; album titles morph from the home page
   (View Transitions).
 - Blurred ThumbHash placeholders fading into the photo.
-- Day sections with a sticky, frosted day label.
+- Day sections with a sticky, frosted day label (moved into the album bar
+  in pass 4).
 - Grid density S / M / L (remembered); viewer slideshow (play button, space).
 
 ## Next
@@ -99,12 +112,11 @@ X-T3/X-E3 JPEGs) and is ready to be tried on the NAS with Docker Compose.
   DB access off a single mutex, `ORDER BY random()` for the home photo.
 - Colour: keep wide gamut as Display-P3, Fuji Adobe RGB without ICC, startup
   format probe.
-- Gzip/brotli for HTML (album pages are ~4 KB per photo before compression).
 
 ## Later / maybe
 
 - Film simulation pages (`/film/classic-chrome`) and per-album film summary.
-- Photo permalinks in the URL, previous / next album links, original download.
+- Previous / next album links, original download (and zooming into it).
 - Filmstrip / contact-sheet album layouts.
 - Map view (private only), search by EXIF.
 - AVIF twins; on-the-fly HLS (go-vod approach) if long videos need it.

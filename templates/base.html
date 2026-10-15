@@ -18,6 +18,8 @@
   <link rel="preload" href="/static/fonts/geist-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="{{ layout.css_url }}">
   <script type="module" src="{{ layout.js_url }}"></script>
+  {# Albums load before the click: the page is fetched on hover (Chrome). #}
+  <script type="speculationrules">{"prefetch": [{"where": {"href_matches": "/a/*"}, "eagerness": "moderate"}]}</script>
 </head>
 <body>
   <header class="masthead">

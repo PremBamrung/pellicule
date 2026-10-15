@@ -125,5 +125,5 @@ Done with the `ffmpeg` CLI at scan time, one global ffmpeg semaphore.
 - Videos and originals support `Range` (206).
 - HTML: `Cache-Control: no-cache` + weak ETag (album update time + build id),
   so repeat views over Funnel are cheap 304s.
-- Static assets: hashed names, embedded in the binary, pre-compressed (brotli).
-  Images and videos are never re-compressed.
+- Static assets: hashed URLs, embedded in the binary. Pages, CSS and JS are
+  compressed on the fly (brotli or gzip); images, fonts and videos never are.

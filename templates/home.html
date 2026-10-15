@@ -1,21 +1,21 @@
 {% extends "base.html" %}
 
 {% block content %}
-{% if let Some(first) = heroes.first() %}
+{% if !heroes.is_empty() %}
 <figure class="hero">
+  {# app.js splits the photos into rows that fill the width and crossfades
+     between them; without it the first few simply show. #}
   <div class="hero-frame">
     {% for hero in heroes %}
-    <a class="hero-slide ph{% if loop.first %} is-current{% endif %}" href="{{ hero.href }}"
-       style="background-color: {{ hero.tile.background }}" data-thumbhash="{{ hero.tile.thumbhash }}"
-       data-album="{{ hero.album_title }}" data-album-href="{{ hero.album_href }}" data-date="{{ hero.tile.label_date }}"
-       {% if !loop.first %}tabindex="-1" aria-hidden="true"{% endif %}>
-      {% if loop.first %}
-      <img src="{{ hero.tile.view_url }}" srcset="{{ hero.tile.wide_srcset }}" sizes="100vw"
+    <a class="hero-photo ph" href="{{ hero.href }}" aria-label="{{ hero.label }}"
+       style="--ar: {{ hero.tile.aspect }}; background-color: {{ hero.tile.background }}" data-thumbhash="{{ hero.tile.thumbhash }}"
+       data-album="{{ hero.album_title }}" data-album-href="{{ hero.album_href }}" data-date="{{ hero.tile.label_date }}">
+      {% if loop.index0 < 4 %}
+      <img src="{{ hero.tile.view_url }}" srcset="{{ hero.tile.wide_srcset }}" sizes="50vw"
            width="{{ hero.tile.zoom_width }}" height="{{ hero.tile.zoom_height }}"
-           fetchpriority="high" decoding="async" alt="">
+           {% if loop.first %}fetchpriority="high" {% endif %}decoding="async" alt="">
       {% else %}
-      {# Loaded by app.js just before it shows. #}
-      <img data-src="{{ hero.tile.view_url }}" data-srcset="{{ hero.tile.wide_srcset }}" sizes="100vw"
+      <img data-src="{{ hero.tile.view_url }}" data-srcset="{{ hero.tile.wide_srcset }}" sizes="50vw"
            width="{{ hero.tile.zoom_width }}" height="{{ hero.tile.zoom_height }}"
            decoding="async" alt="">
       {% endif %}
@@ -23,16 +23,8 @@
     {% endfor %}
   </div>
   <figcaption class="hero-caption">
-    <a href="{{ first.album_href }}">{{ first.album_title }}</a>
-    <span>{{ first.tile.label_date }}</span>
-    {% if heroes.len() > 1 %}
-    <span class="hero-dots" role="group" aria-label="Home photos" hidden>
-      {% for hero in heroes %}
-      <button type="button" aria-label="Photo {{ loop.index }} of {{ heroes.len() }}"
-              {% if loop.first %}aria-current="true"{% endif %}></button>
-      {% endfor %}
-    </span>
-    {% endif %}
+    <span class="hero-label" aria-hidden="true"><a href="" tabindex="-1"></a><span></span></span>
+    <span class="hero-dots" role="group" aria-label="Home photos" hidden></span>
   </figcaption>
 </figure>
 {% endif %}

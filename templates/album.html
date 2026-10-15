@@ -11,7 +11,14 @@
   {% endif %}
   <h1 class="album-title">{{ title }}</h1>
   <p class="album-summary">{{ summary }}</p>
+</header>
 
+<div class="album-bar">
+  <p class="bar-id">
+    <a class="bar-mark" href="/">Pellicule</a>
+    <span class="bar-title">{{ title }}</span>
+    <span class="bar-day"></span>
+  </p>
   <div class="toolbar">
     {% if !filters.is_empty() %}
     <div class="filters" hidden>
@@ -42,7 +49,7 @@
       <button type="button" data-density="l" aria-label="Large photos">L</button>
     </div>
   </div>
-</header>
+</div>
 
 {% if !albums.is_empty() %}
 <section class="albums albums-nested">

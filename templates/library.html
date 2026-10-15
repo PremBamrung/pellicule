@@ -48,15 +48,22 @@
         </thead>
         <tbody>
           {% for run in runs %}
+          {% if run.quiet > 0 %}
+          <tr class="quiet">
+            <td>{{ run.started }}</td>
+            <td colspan="6">{{ run.quiet }} scans with no changes</td>
+          </tr>
+          {% else %}
           <tr>
             <td>{{ run.started }}</td>
             <td>{{ run.trigger }}</td>
             <td><span class="status status-{{ run.status }}">{{ run.status }}</span>{% if !run.error.is_empty() %}<span class="run-error">{{ run.error }}</span>{% endif %}</td>
             <td class="num">{{ run.duration }}</td>
-            <td class="num">{{ run.processed }}</td>
-            <td class="num">{{ run.failed }}</td>
-            <td class="num">{{ run.missing }}</td>
+            <td class="num" data-label="processed">{{ run.processed }}</td>
+            <td class="num" data-label="failed">{{ run.failed }}</td>
+            <td class="num" data-label="missing">{{ run.missing }}</td>
           </tr>
+          {% endif %}
           {% endfor %}
         </tbody>
       </table>

@@ -21,7 +21,7 @@ pub struct Layout {
 #[template(path = "home.html")]
 pub struct HomePage<'a> {
     pub layout: &'a Layout,
-    /// A few random photos, shown one after the other.
+    /// Random photos, shown whole in rows that take turns.
     pub heroes: Vec<Hero>,
     /// "2 albums, 200 photographs, 2023–2025"
     pub stats: String,
@@ -29,16 +29,19 @@ pub struct HomePage<'a> {
     pub tiles: Vec<Tile>,
 }
 
-/// One of the large photos that open the home page, picked at random.
+/// One of the photos that open the home page, picked at random.
 pub struct Hero {
     pub tile: Tile,
     /// The photo in its album: `/a/Japon#p=<key>`.
     pub href: String,
     pub album_href: String,
     pub album_title: String,
+    /// "Japon, 6 October 2023, 12:24", for screen readers.
+    pub label: String,
 }
 
-const HERO_COUNT: usize = 6;
+/// Enough for a few rows of 3–4 photos on a wide screen (app.js).
+const HERO_COUNT: usize = 16;
 
 #[derive(Template)]
 #[template(path = "album.html")]
@@ -83,7 +86,11 @@ pub struct LibraryPage<'a> {
 }
 
 pub struct ScanRun {
+    /// A start time, or "start – end" for a run of quiet scans.
     pub started: String,
+    /// More than zero: this row stands for that many consecutive scans
+    /// that changed nothing, and the other fields are empty.
+    pub quiet: usize,
     pub trigger: String,
     pub status: String,
     pub duration: String,
@@ -131,6 +138,8 @@ pub struct Tile {
     pub zoom_width: u32,
     pub zoom_height: u32,
     pub label_date: String,
+    /// The date, or "Photograph" without one: names the tile's link.
+    pub accessible_name: String,
     pub label_gear: String,
     pub label_exposure: String,
     /// Filter values; empty when unknown.
@@ -161,12 +170,13 @@ pub fn home<'a>(conn: &Connection, layout: &'a Layout) -> Result<HomePage<'a>> {
     })
 }
 
-/// Random landscape photos from the whole library, new on every visit.
+/// Random photos from the whole library, new on every visit. They are
+/// shown whole, so portraits are as welcome as landscapes.
 fn heroes(conn: &Connection) -> Result<Vec<Hero>> {
     let mut stmt = conn.prepare(&format!(
         "SELECT {MEDIA_COLUMNS}, a.rel_path, a.name
          FROM media m JOIN album a ON a.id = m.album_id
-         WHERE {VISIBLE} AND m.width > m.height
+         WHERE {VISIBLE}
          ORDER BY random() LIMIT {HERO_COUNT}"
     ))?;
     let heroes = stmt
@@ -178,11 +188,13 @@ fn heroes(conn: &Connection) -> Result<Vec<Hero>> {
             } else {
                 album_href(&rel_path)
             };
+            let album_title: String = r.get(16)?;
             Ok(Hero {
                 href: format!("{album_href}#p={}", tile.key),
+                label: format!("{album_title}, {}", tile.accessible_name),
                 tile,
                 album_href,
-                album_title: r.get(16)?,
+                album_title,
             })
         })?
         .collect::<rusqlite::Result<_>>()?;
@@ -466,6 +478,11 @@ fn tile_from_row(row: &Row) -> rusqlite::Result<Tile> {
         exposure.push(bias);
     }
 
+    let label_date = taken_at
+        .as_deref()
+        .map(format_date_time)
+        .unwrap_or_default();
+
     Ok(Tile {
         key: key.clone(),
         aspect: format!("{aspect:.4}"),
@@ -482,10 +499,12 @@ fn tile_from_row(row: &Row) -> rusqlite::Result<Tile> {
         zoom_srcset: srcset(&[t, m, l, x]),
         zoom_width,
         zoom_height,
-        label_date: taken_at
-            .as_deref()
-            .map(format_date_time)
-            .unwrap_or_default(),
+        accessible_name: if label_date.is_empty() {
+            "Photograph".into()
+        } else {
+            label_date.clone()
+        },
+        label_date,
         label_gear: gear(make.as_deref(), model.as_deref(), lens.as_deref()),
         label_exposure: exposure.join(", "),
         day: taken_at
@@ -672,35 +691,24 @@ pub fn library<'a>(
 
     let mut stmt = conn.prepare(
         "SELECT started_at, finished_at, trigger, rebuild, status, processed, failed, missing, error
-         FROM scan_run ORDER BY id DESC LIMIT 20",
+         FROM scan_run ORDER BY id DESC LIMIT 200",
     )?;
-    let runs = stmt
+    let raw = stmt
         .query_map([], |r| {
-            let started: i64 = r.get(0)?;
-            let finished: Option<i64> = r.get(1)?;
-            let trigger: String = r.get(2)?;
-            let rebuild: bool = r.get(3)?;
-            let number = |v: Option<i64>| v.map(|n| n.to_string()).unwrap_or_default();
-            Ok(ScanRun {
-                started: format_timestamp(started),
-                trigger: match (trigger.as_str(), rebuild) {
-                    ("startup", _) => "On start".into(),
-                    ("cli", true) => "Command line, rebuild".into(),
-                    ("cli", false) => "Command line".into(),
-                    (_, true) => "Rebuild".into(),
-                    _ => "Rescan".into(),
-                },
-                status: r.get::<_, String>(4)?,
-                duration: finished
-                    .map(|f| format_duration(f - started))
-                    .unwrap_or_default(),
-                processed: number(r.get(5)?),
-                failed: number(r.get(6)?),
-                missing: number(r.get(7)?),
-                error: r.get::<_, Option<String>>(8)?.unwrap_or_default(),
+            Ok(RawRun {
+                started: r.get(0)?,
+                finished: r.get(1)?,
+                trigger: r.get(2)?,
+                rebuild: r.get(3)?,
+                status: r.get(4)?,
+                processed: r.get(5)?,
+                failed: r.get(6)?,
+                missing: r.get(7)?,
+                error: r.get(8)?,
             })
         })?
-        .collect::<rusqlite::Result<_>>()?;
+        .collect::<rusqlite::Result<Vec<_>>>()?;
+    let runs = history(&raw, 20);
 
     let mut stmt = conn.prepare(
         "SELECT a.rel_path, m.file_name, m.error FROM media m JOIN album a ON a.id = m.album_id
@@ -759,6 +767,93 @@ fn format_duration(seconds: i64) -> String {
         s if s < 60 => format!("{s}s"),
         s if s < 3600 => format!("{}m {:02}s", s / 60, s % 60),
         s => format!("{}h {:02}m", s / 3600, (s % 3600) / 60),
+    }
+}
+
+/// One `scan_run` row, newest first.
+struct RawRun {
+    started: i64,
+    finished: Option<i64>,
+    trigger: String,
+    rebuild: bool,
+    status: String,
+    processed: Option<i64>,
+    failed: Option<i64>,
+    missing: Option<i64>,
+    error: Option<String>,
+}
+
+impl RawRun {
+    /// Finished without finding anything to do, like most scans at start.
+    fn is_quiet(&self) -> bool {
+        self.status == "done"
+            && [self.processed, self.failed, self.missing]
+                .iter()
+                .all(|n| n.unwrap_or(0) == 0)
+    }
+}
+
+/// The history table: two or more consecutive quiet scans fold into one
+/// row, so the scans that did something stay in sight.
+fn history(raw: &[RawRun], rows: usize) -> Vec<ScanRun> {
+    let mut runs = Vec::new();
+    let mut i = 0;
+    while i < raw.len() && runs.len() < rows {
+        let quiet = raw[i..].iter().take_while(|r| r.is_quiet()).count();
+        if quiet >= 2 {
+            // Newest first: the group runs from its last row to its first.
+            let (newest, oldest) = (&raw[i], &raw[i + quiet - 1]);
+            runs.push(ScanRun {
+                started: format_span(oldest.started, newest.started),
+                quiet,
+                trigger: String::new(),
+                status: String::new(),
+                duration: String::new(),
+                processed: String::new(),
+                failed: String::new(),
+                missing: String::new(),
+                error: String::new(),
+            });
+            i += quiet;
+            continue;
+        }
+        let run = &raw[i];
+        let number = |v: Option<i64>| v.map(|n| n.to_string()).unwrap_or_default();
+        runs.push(ScanRun {
+            started: format_timestamp(run.started),
+            quiet: 0,
+            trigger: match (run.trigger.as_str(), run.rebuild) {
+                ("startup", _) => "On start".into(),
+                ("cli", true) => "Command line, rebuild".into(),
+                ("cli", false) => "Command line".into(),
+                (_, true) => "Rebuild".into(),
+                _ => "Rescan".into(),
+            },
+            status: run.status.clone(),
+            duration: run
+                .finished
+                .map(|f| format_duration(f - run.started))
+                .unwrap_or_default(),
+            processed: number(run.processed),
+            failed: number(run.failed),
+            missing: number(run.missing),
+            error: run.error.clone().unwrap_or_default(),
+        });
+        i += 1;
+    }
+    runs
+}
+
+/// "15 Oct 2026, 15:00–17:41", or both dates when they differ.
+fn format_span(from: i64, to: i64) -> String {
+    let local = |ts: i64| {
+        chrono::DateTime::from_timestamp(ts, 0).map(|dt| dt.with_timezone(&chrono::Local))
+    };
+    match (local(from), local(to)) {
+        (Some(a), Some(b)) if a.date_naive() == b.date_naive() => {
+            format!("{}–{}", format_timestamp(from), b.format("%H:%M"))
+        }
+        _ => format!("{} – {}", format_timestamp(from), format_timestamp(to)),
     }
 }
 
@@ -889,6 +984,35 @@ mod tests {
         assert_eq!(format_duration(42), "42s");
         assert_eq!(format_duration(125), "2m 05s");
         assert_eq!(format_duration(7260), "2h 01m");
+    }
+
+    #[test]
+    fn quiet_scans_fold_into_one_row() {
+        let run = |started: i64, processed: i64, status: &str| RawRun {
+            started,
+            finished: Some(started + 1),
+            trigger: "startup".into(),
+            rebuild: false,
+            status: status.into(),
+            processed: Some(processed),
+            failed: Some(0),
+            missing: Some(0),
+            error: None,
+        };
+        // Newest first: two quiet, one busy, three quiet, one interrupted, one quiet.
+        let raw = [
+            run(800, 0, "done"),
+            run(700, 0, "done"),
+            run(600, 506, "done"),
+            run(500, 0, "done"),
+            run(400, 0, "done"),
+            run(300, 0, "done"),
+            run(200, 0, "interrupted"),
+            run(100, 0, "done"),
+        ];
+        let rows: Vec<_> = history(&raw, 20).iter().map(|r| r.quiet).collect();
+        assert_eq!(rows, [2, 0, 3, 0, 0]); // a lone quiet scan stays a row
+        assert_eq!(history(&raw, 2).len(), 2);
     }
 
     #[test]

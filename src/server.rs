@@ -19,6 +19,8 @@ use rust_embed::RustEmbed;
 use serde::Deserialize;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
+use tower_http::compression::CompressionLayer;
+use tower_http::compression::predicate::{DefaultPredicate, NotForContentType, Predicate};
 
 use crate::config::Config;
 use crate::pages::{self, Layout};
@@ -148,12 +150,24 @@ fn private_router(state: AppState) -> Router {
         .route("/healthz", get(|| async { "ok" }))
         .fallback(not_found)
         .with_state(state)
+        .layer(compression())
 }
 
 fn public_router() -> Router {
     Router::new()
         .route("/s/{token}", get(shared_album))
         .fallback(not_found)
+        .layer(compression())
+}
+
+/// Brotli or gzip for pages, CSS, JS and JSON. Images, fonts and videos
+/// are already compressed and pass through as they are.
+fn compression() -> CompressionLayer<impl Predicate> {
+    CompressionLayer::new().compress_when(
+        DefaultPredicate::new()
+            .and(NotForContentType::const_new("font/"))
+            .and(NotForContentType::const_new("video/")),
+    )
 }
 
 #[derive(Clone)]

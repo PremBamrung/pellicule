@@ -103,7 +103,7 @@ img { display: block; max-width: 100%; }
 }
 
 .wordmark {
-  font-size: 26px;
+  font-size: clamp(28px, 3vw, 44px);
   font-weight: 600;
   line-height: 1;
   letter-spacing: -0.045em;
@@ -133,44 +133,60 @@ img { display: block; max-width: 100%; }
 
 main { padding-bottom: 120px; }
 
-/* ---- home: a few large photographs crossfading, then the collection - */
+/* ---- home: rows of whole photographs taking turns, then the collection */
 
-/* Framed inside the page margins, about half the screen high. */
+/* Never cropped: a row of photos at one height, as many as fill the page
+   width, about half the screen high (less on phones). app.js splits the
+   photos into rows and fixes the frame's height, so nothing below moves
+   when the rows change. Without it, the first photos simply show. */
 .hero { margin: 8px var(--gutter) 0; }
 
 .hero-frame {
+  --hero-gap: 8px;
   position: relative;
-  height: min(46vh, 42vw);
-  min-height: 220px;
+  display: flex;
+  gap: var(--hero-gap);
+  height: min(55vh, 75vw);
   overflow: hidden;
 }
-/* Stacked; only the current one is visible and clickable. */
-.hero-slide {
+.hero-photo {
+  flex: none;
+  height: 100%;
+  aspect-ratio: var(--ar);
+}
+.hero-photo img {
+  width: 100%;
+  height: 100%;
+}
+/* Rows are stacked and bottom-aligned; only the current one is visible
+   and clickable. */
+.hero-row {
   position: absolute;
   inset: 0;
+  display: flex;
+  align-items: flex-end;
+  gap: var(--hero-gap);
   opacity: 0;
   pointer-events: none;
   transition: opacity 1400ms ease;
 }
-.hero-slide.is-current {
+.hero-row.is-current {
   opacity: 1;
   pointer-events: auto;
 }
-.hero-slide img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
+.hero-row .hero-photo { height: auto; }
 
 .hero-caption {
   display: flex;
-  flex-wrap: wrap;
+  align-items: baseline;
   gap: 4px 16px;
+  min-height: calc(12px + 1.55em);
   padding: 12px 0 0;
   font-size: 14px;
   color: var(--muted);
 }
-.hero-caption a { color: var(--ink); font-weight: 500; }
+.hero-label { display: flex; flex-wrap: wrap; gap: 0 16px; min-width: 0; }
+.hero-label a { color: var(--ink); font-weight: 500; }
 
 .hero-dots {
   display: flex;
@@ -184,9 +200,11 @@ main { padding-bottom: 120px; }
   height: 20px;
   padding: 0;
   border: 0;
+  border-radius: 10px;
   background: none;
   cursor: pointer;
 }
+.hero-dots button:focus-visible { outline-offset: -2px; }
 .hero-dots button::before {
   content: "";
   display: block;
@@ -262,7 +280,7 @@ main { padding-bottom: 120px; }
 /* ---- album page ------------------------------------------------------ */
 
 .album-head {
-  padding: clamp(32px, 5vw, 64px) var(--gutter) 36px;
+  padding: clamp(32px, 5vw, 64px) var(--gutter) 24px;
 }
 
 .crumbs {
@@ -292,15 +310,69 @@ main { padding-bottom: 120px; }
   max-width: 40rem;
 }
 
-/* ---- toolbar: filters on the left, density on the right -------------- */
+/* ---- album bar: the toolbar, which stays at the top once the title has
+   scrolled away, frosted, with the wordmark, album and current day. ---- */
+
+.album-bar {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  gap: 8px 40px;
+  min-height: 56px;
+  margin-bottom: 24px;
+  padding: 12px var(--gutter);
+  transition: background-color 200ms ease;
+}
+.album-bar.is-stuck {
+  background: color-mix(in srgb, var(--wall) 86%, transparent);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+.bar-id {
+  display: none;
+  align-items: baseline;
+  gap: 16px;
+  min-width: 0;
+  margin: 0;
+  font-size: 14px;
+}
+.is-stuck .bar-id { display: flex; }
+.bar-mark {
+  font-size: 20px;
+  font-weight: 600;
+  line-height: 1;
+  letter-spacing: -0.045em;
+}
+.bar-title {
+  overflow: hidden;
+  font-weight: 500;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.bar-day { color: var(--muted); white-space: nowrap; }
+.bar-day:empty { display: none; }
+
+/* Narrower screens: the wordmark and album get their own line. It is kept
+   (invisible) before the bar sticks, so the page doesn't jump when it does,
+   and the bar is pulled up over it so it leaves no gap. */
+@media (max-width: 1100px) {
+  .album-bar { flex-wrap: wrap; margin-top: -30px; }
+  .album-bar:not(.is-stuck) { pointer-events: none; }
+  .album-bar:not(.is-stuck) .toolbar { pointer-events: auto; }
+  .bar-id { display: flex; flex-basis: 100%; height: 22px; visibility: hidden; }
+  .is-stuck .bar-id { visibility: visible; }
+}
 
 .toolbar {
   display: flex;
+  flex: 1;
   flex-wrap: wrap;
   justify-content: space-between;
   align-items: baseline;
   gap: 16px 40px;
-  margin-top: 36px;
 }
 
 .filters {
@@ -391,22 +463,16 @@ main { padding-bottom: 120px; }
   text-underline-offset: 6px;
 }
 
-/* ---- days: a quiet label that stays at the top while its photos scroll */
+/* ---- days: a quiet heading per day; the album bar names the current one */
 
 .day + .day { margin-top: 48px; }
 .day[hidden] { display: none; }
 
 .day-title {
-  position: sticky;
-  top: 0;
-  z-index: 10;
   margin: 0 0 var(--gap);
   padding: 12px var(--gutter);
   font-size: 14px;
   font-weight: 500;
-  background: color-mix(in srgb, var(--wall) 86%, transparent);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
 }
 
 /* ---- justified grid: rows of equal height, widths proportional to the
@@ -435,17 +501,6 @@ main { padding-bottom: 120px; }
 }
 .tile:focus-visible { outline-offset: -2px; }
 
-/* Landing on a photo from a link (`#p=<key>`): a ring that fades out. */
-.tile.is-target::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  /* Two tones, so it shows on dark and light photos alike. */
-  box-shadow: inset 0 0 0 3px var(--ink), inset 0 0 0 5px var(--wall);
-  animation: target-fade 1200ms ease 1400ms forwards;
-  pointer-events: none;
-}
-@keyframes target-fade { to { opacity: 0; } }
 .tile[hidden] { display: none; }
 
 /* ---- empty state ----------------------------------------------------- */
@@ -488,7 +543,38 @@ html .pswp .pswp__counter { color: var(--viewer-muted); text-shadow: none; }
 .pswp__label-date { font-size: 15px; font-weight: 500; letter-spacing: -0.01em; }
 .pswp__label-gear { margin-top: 2px; }
 .pswp__label-exposure { color: var(--viewer-muted); }
-.pswp__label[hidden] { display: block; opacity: 0; }
+/* `html` beats photoswipe.css's `.pswp--ui-visible .pswp__hide-on-close`. */
+html .pswp__label[hidden],
+html .pswp--zoomed-in .pswp__label { display: block; opacity: 0; }
+
+/* Keyboard shortcuts: the button only once a mouse is used (like arrows). */
+.pswp__button--help { display: none; }
+.pswp--has_mouse .pswp__button--help { display: block; }
+.pswp__button--help text {
+  fill: var(--pswp-icon-color);
+  font: 600 19px var(--font);
+}
+.pswp__help {
+  position: absolute;
+  top: 60px;
+  right: 24px;
+  z-index: 20;
+  padding: 14px 20px 16px;
+  border: 1px solid color-mix(in srgb, var(--viewer-ink) 14%, transparent);
+  background: var(--viewer);
+  color: var(--viewer-ink);
+  font: 400 13px/1.5 var(--font);
+}
+.pswp__help[hidden] { display: none; }
+.pswp__help-title { margin: 0 0 8px; font-weight: 500; }
+.pswp__help dl {
+  display: grid;
+  grid-template-columns: auto auto;
+  gap: 4px 24px;
+  margin: 0;
+}
+.pswp__help dt { color: var(--viewer-ink); font-weight: 500; }
+.pswp__help dd { margin: 0; color: var(--viewer-muted); }
 
 .pswp__button--play svg { fill: var(--pswp-icon-color); }
 .pswp__button--fullscreen svg {
@@ -578,6 +664,24 @@ html .pswp .pswp__counter { color: var(--viewer-muted); text-shadow: none; }
 .status-failed, .status-interrupted { color: #b3261e; }
 .status-running { color: var(--accent); }
 .run-error { display: block; color: var(--muted); font-size: 13px; }
+.history .quiet td { color: var(--muted); }
+
+/* Phones: each scan on two lines, "15 Oct, 17:41 · On start" then
+   "Done · 6m 27s · 506 processed · 0 failed · 0 missing". */
+@media (max-width: 720px) {
+  .history thead { display: none; }
+  .history tr {
+    display: block;
+    padding: 10px 0;
+    border-bottom: 1px solid var(--rule);
+  }
+  .history td { display: inline; padding: 0; border: 0; }
+  .history td + td::before { content: "\00a0·\00a0"; color: var(--muted); }
+  .history tr:not(.quiet) td:nth-child(2)::after { content: "\A"; white-space: pre; }
+  .history td:nth-child(3)::before { content: none; }
+  .history td:empty { display: none; }
+  .history td[data-label]::after { content: "\00a0" attr(data-label); }
+}
 
 .failures { list-style: none; margin: 0; padding: 0; font-size: 14px; }
 .failures li {

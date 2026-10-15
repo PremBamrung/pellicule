@@ -84,28 +84,48 @@ try {
   await go("/");
   check("home is white by default", (await ev(`getComputedStyle(document.documentElement).backgroundColor`)) === "rgb(255, 255, 255)");
   check("Geist loaded", await ev(`document.fonts.check("500 16px Geist")`));
-  check("home photo", await ev(`!!document.querySelector(".hero img")`));
-  const slides = await ev(`document.querySelectorAll(".hero-slide").length`);
+  check("home photos", await ev(`document.querySelectorAll(".hero-row.is-current img").length > 0`));
+  const cropped = await ev(`[...document.querySelectorAll(".hero-row.is-current img")]
+    .filter((img) => Math.abs(img.clientWidth / img.clientHeight - img.naturalWidth / img.naturalHeight) > 0.02).length`);
+  check("home photos are not cropped", cropped === 0, `${cropped} cropped`);
+  const fill = await ev(`(() => {
+    const frame = document.querySelector(".hero-frame").getBoundingClientRect();
+    const row = [...document.querySelectorAll(".hero-row.is-current .hero-photo")].map((p) => p.getBoundingClientRect());
+    return [Math.round(row.at(-1).right - frame.left), Math.round(frame.width), Math.round(row[0].height), Math.round(frame.height)];
+  })()`);
+  check(
+    "the row fills the width or the height",
+    Math.abs(fill[0] - fill[1]) <= 2 || Math.abs(fill[2] - fill[3]) <= 2,
+    `row ${fill[0]}×${fill[2]}, frame ${fill[1]}×${fill[3]}`,
+  );
+  check(
+    "pages are compressed",
+    (await ev(`fetch("/").then((r) => r.headers.get("content-encoding"))`)) === "br",
+  );
+  const rows = await ev(`document.querySelectorAll(".hero-row").length`);
   const hrefs = await ev(`[...document.querySelectorAll(".album-card")].map(a => a.getAttribute("href"))`);
   check("album cards", hrefs.length > 0, hrefs.join(", "));
   await shot("home");
-  if (slides > 1) {
-    check("home photo dots", await ev(`!document.querySelector(".hero-dots").hidden`), `${slides} photos`);
-    await sleep(7000);
-    check("home photos crossfade", await ev(`document.querySelectorAll(".hero-slide")[1].classList.contains("is-current")`));
-    check(
-      "caption follows the photo",
-      await ev(`document.querySelector(".hero-caption a").textContent === document.querySelector(".hero-slide.is-current").dataset.album`),
-    );
+  if (rows > 1) {
+    check("home photo dots", await ev(`!document.querySelector(".hero-dots").hidden`), `${rows} rows`);
+    await sleep(9000);
+    check("home rows crossfade", await ev(`document.querySelectorAll(".hero-row")[1].classList.contains("is-current")`));
   }
+  await ev(`document.querySelector(".hero-row.is-current .hero-photo").dispatchEvent(new PointerEvent("pointerover", { bubbles: true }))`);
+  check(
+    "caption names the photo pointed at",
+    await ev(`document.querySelector(".hero-label a").textContent === document.querySelector(".hero-row.is-current .hero-photo").dataset.album`),
+  );
 
-  // A home photo lands on that photo in its album.
-  const photoHref = await ev(`document.querySelector(".hero-slide.is-current")?.getAttribute("href")`);
+  // A home photo opens the viewer on that photo, in its album.
+  const photoHref = await ev(`document.querySelector(".hero-row.is-current .hero-photo")?.getAttribute("href")`);
   if (photoHref?.includes("#p=")) {
     await go(photoHref);
-    const rect = await ev(`(() => { const r = document.querySelector(".tile.is-target")?.getBoundingClientRect(); return r && [r.top, r.bottom, innerHeight]; })()`);
     check("home photo opens its album", (await ev("location.pathname")) === photoHref.split("#")[0]);
-    check("lands on the photo", !!rect && rect[0] >= 0 && rect[1] <= rect[2], JSON.stringify(rect));
+    check(
+      "and the viewer on the photo",
+      await ev(`!!document.querySelector(".pswp--open") && location.hash === ${JSON.stringify("#" + photoHref.split("#")[1])}`),
+    );
     await shot("landing");
   }
 
@@ -128,6 +148,19 @@ try {
   if (hasFilters) check("filters shown", await ev(`!document.querySelector(".filters").hidden`));
   else console.log("skip filters: this album has a single value for every filter");
   await shot("album");
+  check("album bar not stuck at the top", await ev(`!document.querySelector(".album-bar").classList.contains("is-stuck")`));
+  if (days > 1) {
+    await ev(`scrollTo(0, document.querySelectorAll(".day")[1].getBoundingClientRect().top + scrollY + 400)`);
+    await sleep(500);
+    check("album bar sticks", await ev(`document.querySelector(".album-bar").classList.contains("is-stuck")`));
+    check(
+      "and names the current day",
+      await ev(`document.querySelector(".bar-day").textContent === document.querySelectorAll(".day-title")[1].textContent`),
+      await ev(`document.querySelector(".bar-day").textContent`),
+    );
+    await shot("album-bar");
+    await ev("scrollTo(0, 0)");
+  }
   if (days > 1 && hasFilters) {
     await ev(`document.querySelector('[data-filter=day] input').click()`);
     await sleep(300);
@@ -147,7 +180,26 @@ try {
   await sleep(2000);
   check("viewer opens", await ev(`!!document.querySelector(".pswp--open")`));
   check("museum label", !!(await ev(`document.querySelector(".pswp__label")?.innerText`)));
+  check("photo in the URL", (await ev("location.hash")).startsWith("#p="));
   await shot("viewer");
+  await ev(`document.querySelector(".pswp__button--zoom").click()`);
+  await sleep(800);
+  check("label hides while zoomed", (await ev(`getComputedStyle(document.querySelector(".pswp__label")).opacity`)) === "0");
+  await ev(`document.querySelector(".pswp__button--zoom").click()`);
+  await sleep(600);
+  const key = async (key, text) => {
+    await send("Input.dispatchKeyEvent", { type: "keyDown", key, ...(text ? { text } : {}) });
+    await send("Input.dispatchKeyEvent", { type: "keyUp", key });
+    await sleep(300);
+  };
+  await key("?", "?");
+  check("? lists the shortcuts", await ev(`!document.querySelector(".pswp__help").hidden`));
+  await shot("viewer-help");
+  await key("Escape");
+  check(
+    "Esc closes the list first",
+    await ev(`document.querySelector(".pswp__help").hidden && !!document.querySelector(".pswp--open")`),
+  );
   await ev(`document.querySelector(".pswp__button--play").click()`);
   await sleep(4500);
   check("slideshow advances", (await ev(`document.querySelector(".pswp__counter").textContent`)).startsWith("2 /"));
@@ -174,6 +226,28 @@ try {
     await ev(`document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }))`);
     await sleep(800);
   }
+
+  // Closing: the URL loses the photo, focus is back on the tile.
+  check("closing clears the URL", (await ev("location.hash")) === "");
+  check("focus returns to the photo", await ev(`document.activeElement.matches("a.tile")`));
+
+  // Back closes the viewer and stays on the album.
+  await ev(`document.querySelectorAll("a.tile")[2].click()`);
+  await sleep(1500);
+  await ev("history.back()");
+  await sleep(1000);
+  check(
+    "Back closes the viewer",
+    await ev(`!document.querySelector(".pswp--open") && location.pathname === ${JSON.stringify(albumHref)}`),
+  );
+
+  // A link to a photo (reload, shared link) opens the viewer on it.
+  const third = await ev(`document.querySelectorAll("a.tile")[2].dataset.key`);
+  await go("/");
+  await go(`${albumHref}#p=${third}`);
+  check("photo link opens the viewer", (await ev(`document.querySelector(".pswp__counter")?.textContent`))?.startsWith("3 /"));
+  await ev(`document.querySelector(".pswp__button--close").click()`);
+  await sleep(800);
 
   // Theme toggle (restored afterwards)
   await ev(`document.querySelector(".theme-toggle").click()`);

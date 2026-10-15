@@ -14,7 +14,9 @@ no SPA framework, no Node toolchain.
 | Viewer / lightbox | [PhotoSwipe v5](https://photoswipe.com) (MIT) | Zoom, swipe, keyboard, loads full-res only on zoom |
 | Placeholders | Average colour as background, then a [ThumbHash](https://evanw.github.io/thumbhash/) (MIT) blur decoded near the viewport, then the photo fading in | Correct colours before anything loads; no flash of empty boxes |
 | Typeface | [Geist](https://vercel.com/font) (OFL), self-hosted variable font | One family: large and tight for titles, small and quiet for UI |
-| Assets | Embedded in the binary (`rust-embed`), content-hashed URLs, pre-compressed | One file to deploy, immutable caching |
+| Assets | Embedded in the binary (`rust-embed`), content-hashed URLs | One file to deploy, immutable caching |
+| Compression | `tower-http` brotli / gzip for pages, CSS, JS and JSON; images, fonts and videos pass through | Album pages are ~1 KB per photo uncompressed; Funnel is slow |
+| Prefetch | Speculation rules: album pages are fetched on hover (Chrome; ignored elsewhere) | Albums open instantly, no JS |
 
 ## Justified grid
 
@@ -58,9 +60,14 @@ two values for it.
 ## Viewer
 
 PhotoSwipe opens instantly from the already-loaded grid thumbnail (`msrc`), then
-loads `l` (2048). Its `srcset` includes `x`, so the 4096 px variant (or the
-original on the private side) is fetched **only when zooming**. Neighbouring
-slides are preloaded (±1). Back button closes the viewer.
+loads `l` (2048). Its `srcset` includes `x`, so the 4096 px variant is fetched
+**only when zooming** (originals are not served yet). Neighbouring slides are
+preloaded (±1).
+
+The open photo is in the URL (`/a/<album>#p=<key>`): opening the viewer adds a
+history entry, so Back (or a phone's back gesture) closes it, and a reload or a
+shared link opens the viewer on the same photo. Closing leaves the grid
+scrolled to the last photo seen, with keyboard focus on it.
 
 ## Transitions
 
@@ -79,8 +86,8 @@ lazily when the viewer opens.
    dark wall is one click away and remembered per browser; the OS setting is
    ignored), generous margins, no borders, no drop shadows, minimal chrome.
    The viewer follows the theme.
-2. **Typography carries the identity.** One typeface, Geist: a bold 26 px
-   wordmark, large titles (up to 92 px), weight 500, tight tracking
+2. **Typography carries the identity.** One typeface, Geist: a bold wordmark
+   (28 px on phones, growing to 44 px), large titles (up to 92 px), weight 500, tight tracking
    (−0.05em); every other text small (13–15 px) and quiet. No all-caps
    labels.
 3. **Nothing jumps.** Every image has width/height and a ThumbHash before it
@@ -90,26 +97,32 @@ lazily when the viewer opens.
 5. **Color is accurate.** Derivatives are colour-managed: sRGB stays sRGB,
    wide-gamut sources keep a Display-P3 profile (see [cache.md](cache.md)).
 6. **Keyboard and touch are first-class.** ←/→, Esc, `i` for info, space for
-   the slideshow, `f` for fullscreen, swipe, pinch.
+   the slideshow, `f` for fullscreen, `?` for the list of keys, swipe, pinch.
+   Every photo link is named (its date) for screen readers.
 
 ## Pages
 
-- **Home** — opens on six random landscape photographs (new on each visit)
-  crossfading every 6 s, framed inside the page margins at about half the
-  screen height, with the album and date underneath and dots to pick one.
-  It pauses on hover, focus and in background tabs, and doesn't move with
-  reduced motion. A photo links to its album at that photo (`#p=<key>`:
-  scrolled to it, with a ring that fades out). Then a line of library stats ("2 albums, 200
-  photographs, 2023–2025") and the album covers, most recent first.
-- **Album** — the title, a summary, then the toolbar:
-  filters on the left, grid density **S / M / L** on the right (remembered
-  per browser). Albums spanning several days are split into **day sections**
-  whose label ("Saturday 7 October") stays at the top, frosted, while its
-  photos scroll.
-- **Viewer** — PhotoSwipe with the museum label; **slideshow** via the play
-  button or the space bar (4 s per photo); **fullscreen** via its button or
-  `f` (not on iPhone, where pages can't go fullscreen; closing the viewer
-  leaves it); `i` hides the label.
+- **Home** — opens on a row of whole photographs, never cropped: 16 random
+  photos (portraits too) are split into rows of one height (about half the
+  screen, less on phones) that fill the page width, each row the combination
+  closest to that height. The frame keeps one height, so nothing below moves
+  when the next row crossfades in every 8 s; dots pick a row. It pauses on
+  hover, focus and in background tabs, and doesn't move with reduced motion.
+  The album and date of the photo pointed at show under the row; a photo
+  opens the viewer on it in its album (`/a/<album>#p=<key>`). Then a line of
+  library stats ("2 albums, 200 photographs, 2023–2025") and the album
+  covers, most recent first.
+- **Album** — the title, a summary, then the album bar: filters on the left,
+  grid density **S / M / L** on the right (remembered per browser). Once the
+  title has scrolled away the bar stays at the top, frosted, with the
+  wordmark (home), the album name and the current day ("Saturday 7 October")
+  — on narrower screens on a line of its own. Albums spanning several days
+  are split into **day sections** with a quiet heading each.
+- **Viewer** — PhotoSwipe with the museum label (hidden while zoomed in);
+  **slideshow** via the play button or the space bar (4 s per photo);
+  **fullscreen** via its button or `f` (not on iPhone, where pages can't go
+  fullscreen; closing the viewer leaves it); `i` hides the label; `?` or its
+  button (shown once a mouse is used) lists the keys.
 - **Library** — scans and their history (see [architecture](architecture.md)).
 
 ### Planned
