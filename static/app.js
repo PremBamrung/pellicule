@@ -157,6 +157,8 @@ if (photos) {
   let labelHidden = false;
   const PLAY = '<svg aria-hidden="true" viewBox="0 0 32 32" width="32" height="32"><path d="M11 9l12 7-12 7z"/></svg>';
   const PAUSE = '<svg aria-hidden="true" viewBox="0 0 32 32" width="32" height="32"><path d="M10 9h4v14h-4zM18 9h4v14h-4z"/></svg>';
+  const ENTER_FULL = '<svg aria-hidden="true" viewBox="0 0 32 32" width="32" height="32"><path d="M9 14V9h5M18 9h5v5M23 18v5h-5M14 23H9v-5"/></svg>';
+  const EXIT_FULL = '<svg aria-hidden="true" viewBox="0 0 32 32" width="32" height="32"><path d="M14 9v5H9M23 14h-5V9M18 23v-5h5M9 18h5v5"/></svg>';
 
   lightbox.on("uiRegister", () => {
     const pswp = lightbox.pswp;
@@ -219,6 +221,39 @@ if (photos) {
       },
     });
 
+    // Fullscreen: the button or "f". Leaving the viewer leaves fullscreen.
+    // Not offered where pages can't go fullscreen (iPhone).
+    if (document.fullscreenEnabled) {
+      pswp.ui.registerElement({
+        name: "fullscreen",
+        order: 9,
+        isButton: true,
+        title: "Fullscreen (f)",
+        html: ENTER_FULL,
+        onInit: (button) => {
+          const sync = () => {
+            const full = !!document.fullscreenElement;
+            button.innerHTML = full ? EXIT_FULL : ENTER_FULL;
+            button.title = full ? "Exit fullscreen (f)" : "Fullscreen (f)";
+          };
+          const toggle = () =>
+            (document.fullscreenElement
+              ? document.exitFullscreen()
+              : root.requestFullscreen()
+            ).catch(() => {});
+          button.addEventListener("click", toggle);
+          pswp.on("keydown", ({ originalEvent: event }) => {
+            if (event.key === "f" && !event.metaKey && !event.ctrlKey && !event.altKey) toggle();
+          });
+          // Also when the browser leaves fullscreen itself (Esc).
+          document.addEventListener("fullscreenchange", sync);
+          pswp.on("close", () => {
+            document.removeEventListener("fullscreenchange", sync);
+            if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
+          });
+        },
+      });
+    }
   });
 
   lightbox.init();

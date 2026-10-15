@@ -89,7 +89,8 @@ lazily when the viewer opens.
    derivative; originals only on explicit zoom or download.
 5. **Color is accurate.** Derivatives are colour-managed: sRGB stays sRGB,
    wide-gamut sources keep a Display-P3 profile (see [cache.md](cache.md)).
-6. **Keyboard and touch are first-class.** ←/→, Esc, `i` for info, swipe, pinch.
+6. **Keyboard and touch are first-class.** ←/→, Esc, `i` for info, space for
+   the slideshow, `f` for fullscreen, swipe, pinch.
 
 ## Pages
 
@@ -106,7 +107,9 @@ lazily when the viewer opens.
   whose label ("Saturday 7 October") stays at the top, frosted, while its
   photos scroll.
 - **Viewer** — PhotoSwipe with the museum label; **slideshow** via the play
-  button or the space bar (4 s per photo); `i` hides the label.
+  button or the space bar (4 s per photo); **fullscreen** via its button or
+  `f` (not on iPhone, where pages can't go fullscreen; closing the viewer
+  leaves it); `i` hides the label.
 - **Library** — scans and their history (see [architecture](architecture.md)).
 
 ### Planned

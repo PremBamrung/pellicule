@@ -491,6 +491,11 @@ html .pswp .pswp__counter { color: var(--viewer-muted); text-shadow: none; }
 .pswp__label[hidden] { display: block; opacity: 0; }
 
 .pswp__button--play svg { fill: var(--pswp-icon-color); }
+.pswp__button--fullscreen svg {
+  fill: none;
+  stroke: var(--pswp-icon-color);
+  stroke-width: 2;
+}
 
 @media (max-width: 720px) {
   .pswp__label { left: 16px; bottom: 14px; font-size: 12px; }

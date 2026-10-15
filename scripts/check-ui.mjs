@@ -153,8 +153,27 @@ try {
   check("slideshow advances", (await ev(`document.querySelector(".pswp__counter").textContent`)).startsWith("2 /"));
   await ev(`document.querySelector(".pswp__button--play").click()`);
 
-  await ev(`document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }))`);
-  await sleep(800);
+  // Fullscreen needs a user gesture: send real key presses.
+  const press = async (key) => {
+    await send("Input.dispatchKeyEvent", { type: "keyDown", key, text: key });
+    await send("Input.dispatchKeyEvent", { type: "keyUp", key });
+    await sleep(700);
+  };
+  if (await ev(`!!document.querySelector(".pswp__button--fullscreen")`)) {
+    await press("f");
+    check("f enters fullscreen", await ev(`!!document.fullscreenElement`));
+    check("button shows exit", (await ev(`document.querySelector(".pswp__button--fullscreen").title`)).startsWith("Exit"));
+    await press("f");
+    check("f leaves fullscreen", await ev(`!document.fullscreenElement`));
+    await press("f");
+    await ev(`document.querySelector(".pswp__button--close").click()`);
+    await sleep(800);
+    check("closing the viewer leaves fullscreen", await ev(`!document.fullscreenElement`));
+  } else {
+    console.log("skip fullscreen: not supported by this browser");
+    await ev(`document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }))`);
+    await sleep(800);
+  }
 
   // Theme toggle (restored afterwards)
   await ev(`document.querySelector(".theme-toggle").click()`);
