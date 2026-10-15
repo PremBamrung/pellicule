@@ -2,12 +2,12 @@
 //! stored on the cache disk, so browsing never wakes the library's HDD.
 //! See docs/cache.md.
 
+use std::ffi::CStr;
 use std::fs::File;
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result, anyhow, bail};
-use libvips::ops;
-use libvips::{VipsApp, VipsImage};
+use libvips::{VipsImage, bindings, ops};
 
 // libvips compatibility: the Rust bindings are generated for libvips 8.17+
 // and their `*_with_opts` functions send every optional argument by name,
@@ -17,7 +17,7 @@ use libvips::{VipsApp, VipsImage};
 // (`file.webp[Q=80,...]`), which sends just the options we write.
 
 /// Bump when sizes, quality or processing change: everything is regenerated.
-pub const PIPELINE_VERSION: i64 = 1;
+pub const PIPELINE_VERSION: i64 = 2;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Variant {
@@ -128,12 +128,13 @@ fn write_variants(source: &Path, cache: &Path, key: &str, long_edge: u32) -> Res
     // the result is `size`.
     let target = |variant: Variant| variant.long_edge.min(long_edge) as i32;
 
-    // Shrink-on-load and autorotate in one pass, then keep the result in
-    // memory so the smaller sizes don't decode again.
+    // Shrink-on-load and autorotate in one pass, convert to sRGB, then keep
+    // the result in memory so the smaller sizes don't decode again.
     let largest = VARIANTS[0];
-    let mut image =
+    let image =
         ops::thumbnail(&utf8(source)?, target(largest)).map_err(|e| vips_error("decoding", e))?;
-    image = VipsImage::image_copy_memory(image).map_err(|e| vips_error("buffering", e))?;
+    let mut image =
+        VipsImage::image_copy_memory(to_srgb(image)).map_err(|e| vips_error("buffering", e))?;
     save(&image, cache, key, largest)?;
 
     for variant in &VARIANTS[1..] {
@@ -143,6 +144,21 @@ fn write_variants(source: &Path, cache: &Path, key: &str, long_edge: u32) -> Res
         save(&image, cache, key, *variant)?;
     }
     Ok(image)
+}
+
+/// Derivatives are sRGB with no profile (it's stripped on save), so an image
+/// with an embedded profile (Adobe RGB, Display-P3…) has its pixels converted.
+/// `icc_transform` fails when there is no embedded profile: the image is then
+/// already taken as sRGB and kept as is. (The bindings can't check for the
+/// profile first.)
+fn to_srgb(image: VipsImage) -> VipsImage {
+    match ops::icc_transform(&image, "srgb") {
+        Ok(converted) => converted,
+        Err(_) => {
+            take_vips_error();
+            image
+        }
+    }
 }
 
 fn save(image: &VipsImage, cache: &Path, key: &str, variant: Variant) -> Result<()> {
@@ -181,8 +197,9 @@ fn display_dims(source: &Path) -> Result<(u32, u32)> {
 }
 
 fn placeholder(image: &VipsImage) -> Result<(Vec<u8>, u32)> {
-    // ThumbHash wants at most 100×100.
-    let tiny = ops::thumbnail_image(image, 100).map_err(|e| vips_error("placeholder", e))?;
+    // ThumbHash wants at most 100×100; `thumbnail_image` would upscale.
+    let size = image.get_width().max(image.get_height()).min(100);
+    let tiny = ops::thumbnail_image(image, size).map_err(|e| vips_error("placeholder", e))?;
     let (w, h) = (tiny.get_width() as usize, tiny.get_height() as usize);
     let bands = tiny.get_bands() as usize;
     let pixels = tiny.image_write_to_memory();
@@ -215,17 +232,26 @@ fn utf8(path: &Path) -> Result<String> {
 /// The bindings' errors only say which operation failed; libvips' own
 /// message (e.g. "unknown option") is in its error buffer.
 fn vips_error(what: &str, err: libvips::error::Error) -> anyhow::Error {
-    let app = VipsApp;
-    let detail = app
-        .error_buffer()
-        .unwrap_or_default()
-        .trim()
-        .replace('\n', "; ");
-    app.error_clear();
+    let detail = take_vips_error();
     if detail.is_empty() {
         anyhow!("libvips {what}: {err}")
     } else {
         anyhow!("libvips {what}: {detail}")
+    }
+}
+
+/// Reads and clears libvips' error buffer. Not through `VipsApp`: dropping
+/// one, even a temporary, calls `vips_shutdown`.
+fn take_vips_error() -> String {
+    // SAFETY: libvips always returns a valid NUL-terminated string; it's
+    // copied before the buffer is cleared.
+    unsafe {
+        let detail = CStr::from_ptr(bindings::vips_error_buffer())
+            .to_string_lossy()
+            .trim()
+            .replace('\n', "; ");
+        bindings::vips_error_clear();
+        detail
     }
 }
 
@@ -241,10 +267,17 @@ mod tests {
         assert_eq!(fit(1000, 800, l), (1000, 800));
     }
 
+    fn temp_dir(name: &str) -> PathBuf {
+        let dir =
+            std::env::temp_dir().join(format!("pellicule-test-{}-{name}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
     #[test]
     fn content_key_covers_the_whole_file() {
-        let dir = std::env::temp_dir().join(format!("pellicule-test-{}-key", std::process::id()));
-        std::fs::create_dir_all(&dir).unwrap();
+        let dir = temp_dir("key");
         let a = dir.join("a.bin");
         let mut data = vec![7u8; 300 * 1024];
         std::fs::write(&a, &data).unwrap();
@@ -259,5 +292,100 @@ mod tests {
         std::fs::write(&b, &data).unwrap();
         assert_ne!(content_key(&b).unwrap(), key_a);
         std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    /// Generates every variant of a fixture (tests/fixtures, made by
+    /// scripts/make-fixtures.sh) and checks what all of them share.
+    fn derive_fixture(name: &str) -> (Derived, Vec<(Variant, VipsImage)>) {
+        // Once, and never dropped: `vips_init` isn't thread-safe and dropping
+        // a `VipsApp` shuts libvips down for the whole process.
+        static VIPS: std::sync::Once = std::sync::Once::new();
+        VIPS.call_once(|| {
+            std::mem::forget(libvips::VipsApp::new("pellicule-test", false).unwrap())
+        });
+        let source = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("tests/fixtures")
+            .join(name);
+        let cache = temp_dir(name);
+        let key = content_key(&source).unwrap();
+        let derived = generate(&source, &cache, &key, true).unwrap();
+
+        let variants = VARIANTS
+            .iter()
+            .map(|v| {
+                let file = path(&cache, &key, *v);
+                let bytes = std::fs::read(&file).unwrap();
+                // No colour profile, EXIF or XMP chunk survives.
+                for chunk in [b"ICCP", b"EXIF", b"XMP "] {
+                    assert!(!bytes.windows(4).any(|w| w == chunk), "{name} {}", v.name);
+                }
+                let image = VipsImage::new_from_buffer(&bytes, "").unwrap();
+                let image = VipsImage::image_copy_memory(image).unwrap();
+                let expected = fit(derived.width, derived.height, *v);
+                let actual = (image.get_width() as u32, image.get_height() as u32);
+                assert_eq!(actual, expected, "{name} {}", v.name);
+                (*v, image)
+            })
+            .collect();
+        std::fs::remove_dir_all(&cache).unwrap();
+        (derived, variants)
+    }
+
+    fn pixel(image: &VipsImage, x: usize, y: usize) -> Vec<f64> {
+        let (w, bands) = (image.get_width() as usize, image.get_bands() as usize);
+        let start = (y * w + x) * bands;
+        let bytes = image.image_write_to_memory();
+        bytes[start..start + bands]
+            .iter()
+            .map(|&b| b as f64)
+            .collect()
+    }
+
+    #[test]
+    fn wide_gamut_is_converted_to_srgb() {
+        let (derived, variants) = derive_fixture("p3.jpg");
+        assert_eq!((derived.width, derived.height), (1200, 800));
+        // Red in sRGB is (220, 30, 30); left in P3 it would be ~(213, 72, 62).
+        for (v, image) in &variants {
+            let px = pixel(image, 10, 10);
+            assert!(
+                px[0] > 205.0 && px[1] < 50.0 && px[2] < 50.0,
+                "{}: {px:?}",
+                v.name
+            );
+        }
+    }
+
+    #[test]
+    fn orientation_is_applied() {
+        let (derived, variants) = derive_fixture("rotated.jpg");
+        // Stored 64×32 red | blue, orientation 6: displayed 32×64, red on top.
+        assert_eq!((derived.width, derived.height), (32, 64));
+        for (v, image) in &variants {
+            let (top, bottom) = (pixel(image, 16, 8), pixel(image, 16, 56));
+            assert!(top[0] > 150.0 && top[2] < 100.0, "{} top: {top:?}", v.name);
+            assert!(
+                bottom[2] > 150.0 && bottom[0] < 100.0,
+                "{} bottom: {bottom:?}",
+                v.name
+            );
+        }
+    }
+
+    #[test]
+    fn grayscale_alpha_keeps_its_alpha() {
+        let (_, variants) = derive_fixture("gray-alpha.png");
+        for (v, image) in &variants {
+            assert!(image.image_hasalpha(), "{}", v.name);
+            let px = pixel(image, 4, 4);
+            assert!((px[0] - 128.0).abs() < 8.0, "{}: {px:?}", v.name);
+        }
+    }
+
+    #[test]
+    fn small_images_are_not_upscaled() {
+        // The dimension check in `derive_fixture` does the work.
+        let (derived, _) = derive_fixture("tiny.jpg");
+        assert_eq!((derived.width, derived.height), (40, 30));
     }
 }

@@ -94,9 +94,22 @@ The `libvips` crate is generated for 8.17+, and its `*_with_opts` functions
 send **every** optional argument by name, including ones renamed after 8.16
 (`input-profile` was `import-profile`), so on 8.16 the whole call fails.
 Rule: only call binding functions **without** options (`ops::thumbnail`,
-`ops::thumbnail_image`), and pass save options in libvips' filename syntax
-(`image_write_to_file("x.webp[Q=80,effort=4,keep=none]")`). Always test
-image changes in Docker too.
+`ops::thumbnail_image`, `ops::icc_transform`), and pass save options in
+libvips' filename syntax (`image_write_to_file("x.webp[Q=80,effort=4,keep=none]")`).
+
+Never create a temporary `VipsApp` (e.g. `VipsApp.error_clear()`): dropping
+one calls `vips_shutdown` for the whole process. Use the raw
+`libvips::bindings` error functions instead, as `derive::take_vips_error` does.
+
+The derivative tests run the real pipeline on `tests/fixtures/` (made by
+`scripts/make-fixtures.sh`). Run them against Debian's libvips too, after any
+image change:
+
+```sh
+docker run --rm -v "$PWD":/src:ro -w /src -e CARGO_TARGET_DIR=/tmp/target \
+  -e DEBIAN_FRONTEND=noninteractive rust:1-slim-trixie sh -c \
+  'apt-get update -qq && apt-get install -y -qq --no-install-recommends pkg-config libvips-dev >/dev/null && cargo test'
+```
 
 ## Conventions
 
