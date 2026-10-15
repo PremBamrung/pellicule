@@ -1,6 +1,6 @@
 <a class="album-card" href="{{ album.href }}">
   {% if let Some(cover) = album.cover %}
-  <span class="album-cover" style="--ar: {{ cover.aspect }}; background-color: {{ cover.background }}">
+  <span class="album-cover ph" style="background-color: {{ cover.background }}" data-thumbhash="{{ cover.thumbhash }}">
     <img src="{{ cover.view_url }}" srcset="{{ cover.cover_srcset }}"
          sizes="(max-width: 720px) 100vw, 50vw"
          width="{{ cover.thumb_width }}" height="{{ cover.thumb_height }}"

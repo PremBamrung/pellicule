@@ -1,23 +1,40 @@
 {% extends "base.html" %}
 
 {% block content %}
+{% if let Some(hero) = hero %}
+<figure class="hero">
+  <a class="hero-frame ph" href="{{ hero.album_href }}"
+     style="background-color: {{ hero.tile.background }}" data-thumbhash="{{ hero.tile.thumbhash }}">
+    <img src="{{ hero.tile.view_url }}" srcset="{{ hero.tile.wide_srcset }}" sizes="100vw"
+         width="{{ hero.tile.zoom_width }}" height="{{ hero.tile.zoom_height }}"
+         fetchpriority="high" decoding="async" alt="">
+  </a>
+  <figcaption class="hero-caption">
+    <a href="{{ hero.album_href }}">{{ hero.album_title }}</a>
+    <span>{{ hero.tile.label_date }}</span>
+  </figcaption>
+</figure>
+{% endif %}
+
 {% if albums.is_empty() && tiles.is_empty() %}
 <section class="empty">
   <h1>The walls are bare</h1>
-  <p>Nothing has been indexed yet. Add folders of photos to the library, then run a scan.
-     A scan also starts on its own each time Pellicule starts.</p>
+  <p>Nothing has been indexed yet. Add folders of photos to the library, then start a scan
+     from the <a href="/library">Library</a> page. A scan also starts each time Pellicule starts.</p>
 </section>
-{% endif %}
-
-{% if !albums.is_empty() %}
-<section class="albums">
-  {% for album in albums %}{% include "album_card.html" %}{% endfor %}
-</section>
-{% endif %}
-
-{% if !tiles.is_empty() %}
-<section class="grid">
-  {% for tile in tiles %}{% include "tile.html" %}{% endfor %}
+{% else %}
+<section class="collection">
+  <p class="stats">{{ stats }}</p>
+  {% if !albums.is_empty() %}
+  <div class="albums">
+    {% for album in albums %}{% include "album_card.html" %}{% endfor %}
+  </div>
+  {% endif %}
+  {% if !tiles.is_empty() %}
+  <div class="photos"><div class="grid">
+    {% for tile in tiles %}{% include "tile.html" %}{% endfor %}
+  </div></div>
+  {% endif %}
 </section>
 {% endif %}
 {% endblock %}

@@ -3,6 +3,14 @@
 {% block title %}{{ title }} · Pellicule{% endblock %}
 
 {% block content %}
+{% if let Some(cover) = cover %}
+<div class="album-banner ph" style="background-color: {{ cover.background }}" data-thumbhash="{{ cover.thumbhash }}">
+  <img src="{{ cover.view_url }}" srcset="{{ cover.wide_srcset }}" sizes="100vw"
+       width="{{ cover.zoom_width }}" height="{{ cover.zoom_height }}"
+       fetchpriority="high" decoding="async" alt="">
+</div>
+{% endif %}
+
 <header class="album-head">
   {% if !crumbs.is_empty() %}
   <nav class="crumbs" aria-label="Parent albums">
@@ -11,29 +19,37 @@
   {% endif %}
   <h1 class="album-title">{{ title }}</h1>
   <p class="album-summary">{{ summary }}</p>
-  {% if !filters.is_empty() %}
-  <div class="filters" hidden>
-    {% for group in filters %}
-    <details class="filter" data-filter="{{ group.key }}">
-      <summary data-label="{{ group.label }}">{{ group.label }}</summary>
-      <fieldset>
-        <legend class="visually-hidden">{{ group.label }}</legend>
-        {% for option in group.options %}
-        <label>
-          <input type="checkbox" name="{{ group.key }}" value="{{ option.value }}">
-          <span>{{ option.label }}</span>
-          <span class="count">{{ option.count }}</span>
-        </label>
-        {% endfor %}
-      </fieldset>
-    </details>
-    {% endfor %}
-    <p class="filter-status" hidden>
-      <span class="filter-count"></span>
-      <button type="button" class="filter-clear">Clear filters</button>
-    </p>
+
+  <div class="toolbar">
+    {% if !filters.is_empty() %}
+    <div class="filters" hidden>
+      {% for group in filters %}
+      <details class="filter" data-filter="{{ group.key }}">
+        <summary data-label="{{ group.label }}">{{ group.label }}</summary>
+        <fieldset>
+          <legend class="visually-hidden">{{ group.label }}</legend>
+          {% for option in group.options %}
+          <label>
+            <input type="checkbox" name="{{ group.key }}" value="{{ option.value }}">
+            <span>{{ option.label }}</span>
+            <span class="count">{{ option.count }}</span>
+          </label>
+          {% endfor %}
+        </fieldset>
+      </details>
+      {% endfor %}
+      <p class="filter-status" hidden>
+        <span class="filter-count"></span>
+        <button type="button" class="filter-clear">Clear filters</button>
+      </p>
+    </div>
+    {% endif %}
+    <div class="density" role="group" aria-label="Photo size" hidden>
+      <button type="button" data-density="s" aria-label="Small photos">S</button>
+      <button type="button" data-density="m" aria-label="Medium photos">M</button>
+      <button type="button" data-density="l" aria-label="Large photos">L</button>
+    </div>
   </div>
-  {% endif %}
 </header>
 
 {% if !albums.is_empty() %}
@@ -42,9 +58,14 @@
 </section>
 {% endif %}
 
-{% if !tiles.is_empty() %}
-<section class="grid">
-  {% for tile in tiles %}{% include "tile.html" %}{% endfor %}
-</section>
-{% endif %}
+<div class="photos">
+  {% for section in sections %}
+  <section class="day">
+    {% if !section.label.is_empty() %}<h2 class="day-title">{{ section.label }}</h2>{% endif %}
+    <div class="grid">
+      {% for tile in section.tiles %}{% include "tile.html" %}{% endfor %}
+    </div>
+  </section>
+  {% endfor %}
+</div>
 {% endblock %}

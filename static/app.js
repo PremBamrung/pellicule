@@ -1,8 +1,51 @@
 import PhotoSwipeLightbox from "./vendor/photoswipe/photoswipe-lightbox.esm.min.js";
+import { thumbHashToDataURL } from "./vendor/thumbhash/thumbhash.js";
 
-// Load the PhotoSwipe stylesheet only on pages that have a grid.
-const grid = document.querySelector(".grid");
-if (grid) {
+const root = document.documentElement;
+const remember = (key, value) => {
+  try {
+    localStorage.setItem(key, value);
+  } catch {}
+};
+
+// ---- placeholders: blurred ThumbHash behind each photo, then a fade-in ---
+
+const decode = (element) => {
+  const hash = element.dataset.thumbhash;
+  if (!hash) return;
+  try {
+    const bytes = Uint8Array.from(atob(hash), (c) => c.charCodeAt(0));
+    element.style.backgroundImage = `url(${thumbHashToDataURL(bytes)})`;
+  } catch {}
+};
+
+// Decode only what is about to scroll into view: albums can be large.
+const nearby = new IntersectionObserver(
+  (entries) => {
+    for (const entry of entries) {
+      if (!entry.isIntersecting) continue;
+      decode(entry.target);
+      nearby.unobserve(entry.target);
+    }
+  },
+  { rootMargin: "800px 0px" },
+);
+
+for (const element of document.querySelectorAll(".ph")) {
+  const img = element.querySelector("img");
+  if (img && !(img.complete && img.naturalWidth)) nearby.observe(element);
+  if (!img) continue;
+  if (img.complete && img.naturalWidth) img.classList.add("is-loaded");
+  else {
+    img.addEventListener("load", () => img.classList.add("is-loaded"), { once: true });
+    img.addEventListener("error", () => img.classList.add("is-loaded"), { once: true });
+  }
+}
+
+// ---- viewer ---------------------------------------------------------------
+
+const photos = document.querySelector(".photos");
+if (photos) {
   const css = document.createElement("link");
   css.rel = "stylesheet";
   css.href = "/static/vendor/photoswipe/photoswipe.css";
@@ -10,7 +53,7 @@ if (grid) {
 
   const narrow = matchMedia("(max-width: 720px)").matches;
   const lightbox = new PhotoSwipeLightbox({
-    gallery: ".grid",
+    gallery: ".photos",
     // Filtered-out photos are skipped by the viewer too.
     children: "a.tile:not([hidden])",
     pswpModule: () => import("./vendor/photoswipe/photoswipe.esm.min.js"),
@@ -27,12 +70,16 @@ if (grid) {
   });
 
   let labelHidden = false;
+  const PLAY = '<svg aria-hidden="true" viewBox="0 0 32 32" width="32" height="32"><path d="M11 9l12 7-12 7z"/></svg>';
+  const PAUSE = '<svg aria-hidden="true" viewBox="0 0 32 32" width="32" height="32"><path d="M10 9h4v14h-4zM18 9h4v14h-4z"/></svg>';
 
   lightbox.on("uiRegister", () => {
-    lightbox.pswp.ui.registerElement({
+    const pswp = lightbox.pswp;
+
+    pswp.ui.registerElement({
       name: "label",
       appendTo: "root",
-      onInit: (element, pswp) => {
+      onInit: (element) => {
         const date = line("pswp__label-date");
         const gear = line("pswp__label-gear");
         const exposure = line("pswp__label-exposure");
@@ -54,33 +101,97 @@ if (grid) {
         });
       },
     });
+
+    // Slideshow: the play button or the space bar; 4 s per photo.
+    pswp.ui.registerElement({
+      name: "play",
+      order: 8,
+      isButton: true,
+      title: "Slideshow (space)",
+      html: PLAY,
+      onInit: (button) => {
+        let timer = null;
+        const stop = () => {
+          clearInterval(timer);
+          timer = null;
+          button.innerHTML = PLAY;
+          button.title = "Slideshow (space)";
+        };
+        const toggle = () => {
+          if (timer) return stop();
+          timer = setInterval(() => pswp.next(), 4000);
+          button.innerHTML = PAUSE;
+          button.title = "Pause (space)";
+        };
+        button.addEventListener("click", toggle);
+        pswp.on("keydown", (event) => {
+          if (event.originalEvent.key === " ") {
+            event.preventDefault();
+            toggle();
+          }
+        });
+        pswp.on("close", stop);
+      },
+    });
   });
 
   lightbox.init();
+}
+
+function line(className) {
+  const div = document.createElement("div");
+  div.className = className;
+  return div;
 }
 
 // ---- theme: white by default, dark on request, remembered per browser --
 
 const toggle = document.querySelector(".theme-toggle");
 if (toggle) {
-  const root = document.documentElement;
   const label = () => (toggle.textContent = root.dataset.theme === "dark" ? "Light" : "Dark");
   label();
   toggle.hidden = false;
   toggle.addEventListener("click", () => {
     root.dataset.theme = root.dataset.theme === "dark" ? "light" : "dark";
-    try {
-      localStorage.setItem("theme", root.dataset.theme);
-    } catch {}
+    remember("theme", root.dataset.theme);
     label();
   });
+}
+
+// ---- grid density: S / M / L, remembered per browser ---------------------
+
+const density = document.querySelector(".density");
+if (density) {
+  const ROW = { s: 200, m: 300, l: 460 };
+  const tiles = document.querySelectorAll("a.tile img");
+  const apply = (size) => {
+    if (size === "m") delete root.dataset.density;
+    else root.dataset.density = size;
+    for (const button of density.querySelectorAll("button")) {
+      button.setAttribute("aria-pressed", String(button.dataset.density === size));
+    }
+    // Keep `sizes` in step with the row height so the right file loads.
+    for (const img of tiles) {
+      const ar = parseFloat(img.parentElement.style.getPropertyValue("--ar")) || 1.5;
+      img.sizes = `${Math.round(ar * ROW[size])}px`;
+    }
+  };
+  apply(root.dataset.density ?? "m");
+  density.addEventListener("click", (event) => {
+    const size = event.target.closest("button")?.dataset.density;
+    if (!size) return;
+    apply(size);
+    remember("density", size);
+  });
+  density.hidden = false;
 }
 
 // ---- filters: day, camera, lens, focal; state lives in the URL ----------
 
 const filters = document.querySelector(".filters");
-if (filters && grid) {
-  const tiles = [...grid.querySelectorAll("a.tile")];
+if (filters && photos) {
+  const tiles = [...photos.querySelectorAll("a.tile")];
+  const days = [...photos.querySelectorAll(".day")];
   const groups = [...filters.querySelectorAll(".filter")];
   const status = filters.querySelector(".filter-status");
   const count = filters.querySelector(".filter-count");
@@ -89,7 +200,7 @@ if (filters && grid) {
   empty.className = "filter-empty";
   empty.textContent = "No photographs match these filters.";
   empty.hidden = true;
-  grid.before(empty);
+  photos.before(empty);
 
   // Selected values per group, e.g. { camera: Set(["Fujifilm X-T3"]) }.
   const selection = () =>
@@ -114,6 +225,7 @@ if (filters && grid) {
       tile.hidden = !match;
       if (match) shown++;
     }
+    for (const day of days) day.hidden = !day.querySelector("a.tile:not([hidden])");
 
     // Counts reflect the other active filters, so a choice never leads to an
     // empty grid; options that would are greyed out.
@@ -148,8 +260,7 @@ if (filters && grid) {
       for (const value of values) params.append(group.dataset.filter, value);
     }
 
-    const active = params.size > 0;
-    status.hidden = !active;
+    status.hidden = params.size === 0;
     count.textContent = `${shown} of ${tiles.length} ${noun(tiles.length)}`;
     const query = params.toString();
     history.replaceState(null, "", query ? `?${query}` : location.pathname);
@@ -268,22 +379,19 @@ if (scanPanel) {
   poll();
 }
 
-function line(className) {
-  const div = document.createElement("div");
-  div.className = className;
-  return div;
-}
+// ---- page transitions: an album cover grows into the album's banner ------
 
-// Album covers morph into the album title on the next page.
 document.addEventListener("click", (event) => {
   const card = event.target.closest?.(".album-card");
   if (!card) return;
+  const img = card.querySelector(".album-cover img");
   const title = card.querySelector(".album-card-title");
+  if (img) img.style.viewTransitionName = "album-cover";
   if (title) title.style.viewTransitionName = "album-title";
 });
-// Coming back (bfcache), clear the name so it stays unique.
+// Coming back (bfcache), clear the names so they stay unique.
 addEventListener("pageshow", () => {
-  for (const title of document.querySelectorAll(".album-card-title")) {
-    title.style.viewTransitionName = "";
+  for (const element of document.querySelectorAll(".album-cover img, .album-card-title")) {
+    element.style.viewTransitionName = "";
   }
 });

@@ -1,8 +1,9 @@
-<a class="tile" href="{{ tile.view_url }}"
+<a class="tile ph" href="{{ tile.view_url }}"
    style="--ar: {{ tile.aspect }}; background-color: {{ tile.background }}"
    data-pswp-width="{{ tile.zoom_width }}" data-pswp-height="{{ tile.zoom_height }}"
    data-pswp-srcset="{{ tile.zoom_srcset }}"
    data-date="{{ tile.label_date }}" data-gear="{{ tile.label_gear }}" data-exposure="{{ tile.label_exposure }}"
+   data-thumbhash="{{ tile.thumbhash }}"
    data-f-day="{{ tile.day }}" data-f-camera="{{ tile.camera }}" data-f-lens="{{ tile.lens }}" data-f-focal="{{ tile.focal }}">
   <img src="{{ tile.thumb_url }}" srcset="{{ tile.thumb_srcset }}" sizes="{{ tile.sizes }}"
        width="{{ tile.thumb_width }}" height="{{ tile.thumb_height }}"

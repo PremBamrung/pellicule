@@ -21,8 +21,18 @@ pub struct Layout {
 #[template(path = "home.html")]
 pub struct HomePage<'a> {
     pub layout: &'a Layout,
+    pub hero: Option<Hero>,
+    /// "2 albums, 200 photographs, 2023–2025"
+    pub stats: String,
     pub albums: Vec<AlbumCard>,
     pub tiles: Vec<Tile>,
+}
+
+/// The large photo that opens the home page, picked at random.
+pub struct Hero {
+    pub tile: Tile,
+    pub album_href: String,
+    pub album_title: String,
 }
 
 #[derive(Template)]
@@ -32,9 +42,17 @@ pub struct AlbumPage<'a> {
     pub title: String,
     pub crumbs: Vec<Crumb>,
     pub summary: String,
+    pub cover: Option<Tile>,
     pub albums: Vec<AlbumCard>,
-    pub tiles: Vec<Tile>,
+    /// One section per shooting day when the album spans several days,
+    /// otherwise a single unlabelled section.
+    pub sections: Vec<Section>,
     pub filters: Vec<FilterGroup>,
+}
+
+pub struct Section {
+    pub label: String,
+    pub tiles: Vec<Tile>,
 }
 
 /// One filter menu (day, camera, lens, focal) with the values present in
@@ -98,6 +116,10 @@ pub struct Tile {
     pub thumb_width: u32,
     pub thumb_height: u32,
     pub cover_srcset: String,
+    /// For full-width images (hero, album header).
+    pub wide_srcset: String,
+    /// Base64 ThumbHash, decoded into a blurred placeholder by app.js.
+    pub thumbhash: String,
     pub view_url: String,
     pub zoom_srcset: String,
     pub zoom_width: u32,
@@ -126,9 +148,69 @@ pub fn home<'a>(conn: &Connection, layout: &'a Layout) -> Result<HomePage<'a>> {
     };
     Ok(HomePage {
         layout,
+        hero: hero(conn)?,
+        stats: library_stats(conn)?,
         albums,
         tiles,
     })
+}
+
+/// A random landscape photo from the whole library, new on every visit.
+fn hero(conn: &Connection) -> Result<Option<Hero>> {
+    Ok(conn
+        .query_row(
+            &format!(
+                "SELECT {MEDIA_COLUMNS}, a.rel_path, a.name
+                 FROM media m JOIN album a ON a.id = m.album_id
+                 WHERE {VISIBLE} AND m.width > m.height
+                 ORDER BY random() LIMIT 1"
+            ),
+            [],
+            |r| {
+                let rel_path: String = r.get(15)?;
+                Ok(Hero {
+                    tile: tile_from_row(r)?,
+                    album_href: if rel_path.is_empty() {
+                        "/".into()
+                    } else {
+                        album_href(&rel_path)
+                    },
+                    album_title: r.get(16)?,
+                })
+            },
+        )
+        .optional()?)
+}
+
+fn library_stats(conn: &Connection) -> Result<String> {
+    let (albums, photos, first, last): (i64, i64, Option<String>, Option<String>) = conn
+        .query_row(
+            &format!(
+                "SELECT count(DISTINCT m.album_id), count(*), min(m.taken_at), max(m.taken_at)
+                 FROM media m JOIN album a ON a.id = m.album_id WHERE {VISIBLE}"
+            ),
+            [],
+            |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?)),
+        )?;
+    if photos == 0 {
+        return Ok(String::new());
+    }
+    let mut stats = format!(
+        "{albums} {}, {photos} {}",
+        if albums == 1 { "album" } else { "albums" },
+        if photos == 1 {
+            "photograph"
+        } else {
+            "photographs"
+        },
+    );
+    let year = |v: Option<String>| v.and_then(|v| v.get(..4).map(str::to_owned));
+    match (year(first), year(last)) {
+        (Some(a), Some(b)) if a != b => stats.push_str(&format!(", {a}–{b}")),
+        (Some(a), _) => stats.push_str(&format!(", {a}")),
+        _ => {}
+    }
+    Ok(stats)
 }
 
 /// `None` when the album doesn't exist (or is missing / empty).
@@ -169,10 +251,75 @@ pub fn album<'a>(
         title: album.name,
         crumbs,
         summary: summary(count, first.as_deref(), last.as_deref()),
+        cover: cover(conn, &album.rel_path)?,
         albums: child_cards(conn, album.id)?,
         filters: filters(&tiles),
-        tiles,
+        sections: by_day(tiles),
     }))
+}
+
+/// Splits a chronological list of tiles into one section per day, when the
+/// album spans more than one day.
+fn by_day(tiles: Vec<Tile>) -> Vec<Section> {
+    let days: std::collections::BTreeSet<&str> = tiles.iter().map(|t| t.day.as_str()).collect();
+    if days.len() < 2 {
+        return vec![Section {
+            label: String::new(),
+            tiles,
+        }];
+    }
+    let several_years = days
+        .iter()
+        .filter(|d| !d.is_empty())
+        .map(|d| &d[..4])
+        .collect::<std::collections::BTreeSet<_>>()
+        .len()
+        > 1;
+
+    let mut sections: Vec<Section> = Vec::new();
+    let mut current_day: Option<String> = None;
+    for tile in tiles {
+        if current_day.as_deref() != Some(tile.day.as_str()) {
+            current_day = Some(tile.day.clone());
+            sections.push(Section {
+                label: day_label(&tile.day, several_years),
+                tiles: Vec::new(),
+            });
+        }
+        sections.last_mut().expect("pushed above").tiles.push(tile);
+    }
+    sections
+}
+
+/// "Saturday 7 October" (with the year when the album spans several).
+fn day_label(day: &str, with_year: bool) -> String {
+    chrono::NaiveDate::parse_from_str(day, "%Y-%m-%d")
+        .map(|d| {
+            d.format(if with_year {
+                "%A %-d %B %Y"
+            } else {
+                "%A %-d %B"
+            })
+            .to_string()
+        })
+        .unwrap_or_else(|_| "Undated".to_string())
+}
+
+/// The album's cover: its first landscape photo (portraits crop badly in
+/// wide frames), or its first photo.
+fn cover(conn: &Connection, rel_path: &str) -> Result<Option<Tile>> {
+    Ok(conn
+        .query_row(
+            &format!(
+                "SELECT {MEDIA_COLUMNS} FROM media m JOIN album a ON a.id = m.album_id
+                 WHERE {IN_SUBTREE}
+                 ORDER BY m.width < m.height, m.taken_at IS NULL, m.taken_at, m.file_name
+                 LIMIT 1"
+            ),
+            params![rel_path],
+            tile_from_row,
+        )
+        .optional()?)
 }
 
 fn album_by_path(conn: &Connection, rel_path: &str) -> Result<Option<AlbumRow>> {
@@ -195,6 +342,10 @@ fn album_by_path(conn: &Connection, rel_path: &str) -> Result<Option<AlbumRow>> 
 /// anything whose path starts with `<rel_path>/`.
 const IN_SUBTREE: &str = "(a.rel_path = ?1 OR substr(a.rel_path, 1, length(?1) + 1) = ?1 || '/')
      AND a.missing_since IS NULL AND m.missing_since IS NULL
+     AND m.error IS NULL AND m.content_key IS NOT NULL";
+
+/// Media that can be shown anywhere in the library.
+const VISIBLE: &str = "a.missing_since IS NULL AND m.missing_since IS NULL
      AND m.error IS NULL AND m.content_key IS NOT NULL";
 
 fn album_stats(conn: &Connection, rel_path: &str) -> Result<(i64, Option<String>, Option<String>)> {
@@ -229,17 +380,7 @@ fn child_cards(conn: &Connection, parent_id: i64) -> Result<Vec<AlbumCard>> {
         if count == 0 {
             continue;
         }
-        let cover = conn
-            .query_row(
-                &format!(
-                    "SELECT {MEDIA_COLUMNS} FROM media m JOIN album a ON a.id = m.album_id
-                     WHERE {IN_SUBTREE}
-                     ORDER BY m.taken_at IS NULL, m.taken_at, m.file_name LIMIT 1"
-                ),
-                params![child.rel_path],
-                tile_from_row,
-            )
-            .optional()?;
+        let cover = cover(conn, &child.rel_path)?;
         cards.push(AlbumCard {
             href: album_href(&child.rel_path),
             title: child.name,
@@ -254,7 +395,8 @@ fn child_cards(conn: &Connection, parent_id: i64) -> Result<Vec<AlbumCard>> {
 }
 
 const MEDIA_COLUMNS: &str = "m.content_key, m.width, m.height, m.avg_rgb, m.make, m.model, m.lens,
-     m.focal_mm, m.focal_35mm, m.aperture, m.exposure_s, m.iso, m.exposure_bias, m.taken_at";
+     m.focal_mm, m.focal_35mm, m.aperture, m.exposure_s, m.iso, m.exposure_bias, m.taken_at,
+     m.thumbhash";
 
 fn tiles(conn: &Connection, album_id: i64) -> Result<Vec<Tile>> {
     let mut stmt = conn.prepare(&format!(
@@ -284,6 +426,7 @@ fn tile_from_row(row: &Row) -> rusqlite::Result<Tile> {
     let iso: Option<i64> = row.get(11)?;
     let bias: Option<f64> = row.get(12)?;
     let taken_at: Option<String> = row.get(13)?;
+    let thumbhash: Option<Vec<u8>> = row.get(14)?;
 
     let url = |v: Variant| format!("/d/{}", derive::file_name(&key, v));
     let dims = |v: Variant| derive::fit(width, height, v);
@@ -326,6 +469,8 @@ fn tile_from_row(row: &Row) -> rusqlite::Result<Tile> {
         thumb_width,
         thumb_height,
         cover_srcset: srcset(&[m, l]),
+        wide_srcset: srcset(&[m, l, x]),
+        thumbhash: thumbhash.as_deref().map(base64).unwrap_or_default(),
         view_url: url(l),
         zoom_srcset: srcset(&[t, m, l, x]),
         zoom_width,
@@ -661,6 +806,25 @@ fn format_date_time(value: &str) -> String {
         .unwrap_or_default()
 }
 
+fn base64(bytes: &[u8]) -> String {
+    const ALPHABET: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    let mut out = String::with_capacity(bytes.len().div_ceil(3) * 4);
+    for chunk in bytes.chunks(3) {
+        let n = chunk
+            .iter()
+            .enumerate()
+            .fold(0u32, |n, (i, b)| n | (*b as u32) << (16 - 8 * i));
+        for i in 0..4 {
+            if i <= chunk.len() {
+                out.push(ALPHABET[(n >> (18 - 6 * i) & 63) as usize] as char);
+            } else {
+                out.push('=');
+            }
+        }
+    }
+    out
+}
+
 /// `/a/` + percent-encoded path segments.
 pub fn album_href(rel_path: &str) -> String {
     let mut href = String::from("/a/");
@@ -718,6 +882,15 @@ mod tests {
         assert_eq!(format_duration(42), "42s");
         assert_eq!(format_duration(125), "2m 05s");
         assert_eq!(format_duration(7260), "2h 01m");
+    }
+
+    #[test]
+    fn base64_matches_the_standard_alphabet() {
+        assert_eq!(base64(b""), "");
+        assert_eq!(base64(b"f"), "Zg==");
+        assert_eq!(base64(b"fo"), "Zm8=");
+        assert_eq!(base64(b"foo"), "Zm9v");
+        assert_eq!(base64(&[0xfb, 0xff]), "+/8=");
     }
 
     #[test]

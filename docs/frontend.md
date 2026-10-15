@@ -12,7 +12,8 @@ no SPA framework, no Node toolchain.
 | Grid layout | **Pure-CSS justified rows**: the server emits each tile's aspect ratio, CSS `flex-grow` does the rest | No layout shift, no layout JS, responsive for free |
 | Page transitions | CSS View Transitions API (cross-document) | App-like morph from thumbnail to viewer; graceful fallback |
 | Viewer / lightbox | [PhotoSwipe v5](https://photoswipe.com) (MIT) | Zoom, swipe, keyboard, loads full-res only on zoom |
-| Placeholders | Average colour as tile background + [ThumbHash](https://evanw.github.io/thumbhash/) (MIT) above the fold | Correct colours before the image arrives, zero JS for first paint |
+| Placeholders | Average colour as background, then a [ThumbHash](https://evanw.github.io/thumbhash/) (MIT) blur decoded near the viewport, then the photo fading in | Correct colours before anything loads; no flash of empty boxes |
+| Typeface | [Geist](https://vercel.com/font) (OFL), self-hosted variable font | One family: large and tight for titles, small and quiet for UI |
 | Assets | Embedded in the binary (`rust-embed`), content-hashed URLs, pre-compressed | One file to deploy, immutable caching |
 
 ## Justified grid
@@ -78,9 +79,9 @@ lazily when the viewer opens.
    dark wall is one click away and remembered per browser; the OS setting is
    ignored), generous margins, no borders, no drop shadows, minimal chrome.
    The viewer follows the theme.
-2. **Typography carries the identity.** One serif for titles and essay text
-   (e.g. a classic book face), one quiet sans for UI and EXIF; small caps /
-   letter-spacing for metadata.
+2. **Typography carries the identity.** One typeface, Geist: titles set
+   very large (up to 136 px), weight 500, tight tracking (−0.055em); every
+   other text small (13–15 px) and quiet. No all-caps labels.
 3. **Nothing jumps.** Every image has width/height and a ThumbHash before it
    loads.
 4. **Right pixels, right time.** `srcset`/`sizes` pick the smallest adequate
@@ -91,25 +92,38 @@ lazily when the viewer opens.
 
 ## Pages
 
-- **Home** — album covers as large tiles (title, date range, count), most recent
-  first. Optional "featured" albums later.
-- **Album (grid)** — title block, then a justified grid (target row height
-  ~280–340 px desktop, ~180 px mobile). Sub-albums as a row of covers above.
+- **Home** — opens on one random landscape photograph, full width (new on
+  each visit) with its album and date underneath; then a line of library
+  stats ("2 albums, 200 photographs, 2023–2025") and the album covers, most
+  recent first.
+- **Album** — a full-width cover banner (the album's first landscape photo
+  until `index.md` can choose one), the title, a summary, then the toolbar:
+  filters on the left, grid density **S / M / L** on the right (remembered
+  per browser). Albums spanning several days are split into **day sections**
+  whose label ("Saturday 7 October") stays at the top, frosted, while its
+  photos scroll.
+- **Viewer** — PhotoSwipe with the museum label; **slideshow** via the play
+  button or the space bar (4 s per photo); `i` hides the label.
+- **Library** — scans and their history (see [architecture](architecture.md)).
+
+### Planned
+
 - **Album (essay)** — text and images in the sequence of `index.md`: full-width
   single images, rows of 2–3, captions in the margin on wide screens.
   Further layouts to explore later: filmstrip (sprocket-hole band, horizontal
   scroll-snap) and contact sheet, which suit a Fuji / film identity.
-- **Viewer** — PhotoSwipe; caption line with key EXIF, `i` toggles a detail panel.
 - **Share pages** — same templates, no navigation outside the shared subtree.
 
 ## EXIF presentation
 
-A single discreet line under the image in the viewer, e.g.
+A small museum-style label in the bottom-left corner of the viewer:
 
 ```
-X-T5 · XF23mmF1.4 R LM WR · 23 mm (35 mm eq.) · ƒ/2 · 1/500 s · ISO 160 · Classic Chrome
+7 October 2023, 10:04
+Fujifilm X-T3, XF35mmF1.4 R
+35mm (53mm eq.), f/2, 1/210s, ISO 640, −1 EV
 ```
 
-`i` opens the **recipe card** (glass side panel on desktop, bottom sheet on
+Later (M4), `i` opens the **recipe card** (glass side panel on desktop, bottom sheet on
 mobile): film simulation, grain, colour chrome, dynamic range, WB shift,
 highlight/shadow tone… rendered inline, no extra request. See [exif.md](exif.md).

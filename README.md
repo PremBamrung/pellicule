@@ -8,7 +8,10 @@ your folders **read-only** and never imposes its own structure: a folder is an
 album, an optional `index.md` turns an album into an exhibition, and everything
 Pellicule generates lives in a separate cache directory you can delete at any time.
 
-> Status: early design / scaffold. Nothing usable yet.
+> **Status (October 2026):** browsable prototype. Scanning, previews, the
+> gallery (home, albums, viewer, filters) and the Library page work locally;
+> next are running it on the NAS, the Fujifilm recipe and share links.
+> See the [roadmap](docs/roadmap.md).
 
 ## Goals
 
