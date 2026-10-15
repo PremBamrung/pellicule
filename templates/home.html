@@ -1,6 +1,23 @@
 {% extends "base.html" %}
 
 {% block content %}
-<h1>Pellicule</h1>
-<p class="muted">Nothing on the walls yet.</p>
+{% if albums.is_empty() && tiles.is_empty() %}
+<section class="empty">
+  <h1>The walls are bare</h1>
+  <p>Nothing has been indexed yet. Add folders of photos to the library, then run a scan.
+     A scan also starts on its own each time Pellicule starts.</p>
+</section>
+{% endif %}
+
+{% if !albums.is_empty() %}
+<section class="albums">
+  {% for album in albums %}{% include "album_card.html" %}{% endfor %}
+</section>
+{% endif %}
+
+{% if !tiles.is_empty() %}
+<section class="grid">
+  {% for tile in tiles %}{% include "tile.html" %}{% endfor %}
+</section>
+{% endif %}
 {% endblock %}

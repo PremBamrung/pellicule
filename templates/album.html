@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+
+{% block title %}{{ title }} · Pellicule{% endblock %}
+
+{% block content %}
+<header class="album-head">
+  {% if !crumbs.is_empty() %}
+  <nav class="crumbs" aria-label="Parent albums">
+    {% for crumb in crumbs %}<a href="{{ crumb.href }}">{{ crumb.name }}</a>{% endfor %}
+  </nav>
+  {% endif %}
+  <h1 class="album-title">{{ title }}</h1>
+  <p class="album-summary">{{ summary }}</p>
+</header>
+
+{% if !albums.is_empty() %}
+<section class="albums albums-nested">
+  {% for album in albums %}{% include "album_card.html" %}{% endfor %}
+</section>
+{% endif %}
+
+{% if !tiles.is_empty() %}
+<section class="grid">
+  {% for tile in tiles %}{% include "tile.html" %}{% endfor %}
+</section>
+{% endif %}
+{% endblock %}

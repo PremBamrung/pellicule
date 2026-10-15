@@ -22,14 +22,14 @@ a cache, and **serve** that cache over two HTTP listeners.
 |---|---|
 | `config` | Load `pellicule.toml` (library root, cache dir, listener addresses). |
 | `library` | Conventions: media detection, ignore rules, album discovery. |
-| `scan` *(M1)* | Walk the tree, diff against SQLite by (path, size, mtime), enqueue work. |
-| `meta` *(M1/M4)* | EXIF via a Rust crate + own Fujifilm MakerNote parser; `index.md` front matter. |
-| `derive` *(M2/M5)* | libvips previews + ThumbHash; ffmpeg posters and video previews. |
-| `db` *(M1)* | SQLite (single file in cache dir): albums, media, exif, derivatives, shares. |
-| `layout` *(M3)* | Server-side justified-row computation from aspect ratios. |
+| `scan` | Walk the tree, diff against SQLite by (path, size, mtime), process changes in parallel. |
+| `meta` | Standard EXIF via `nom-exif` and its formatting; Fujifilm MakerNote *(M4)*; `index.md` *(later)*. |
+| `derive` | libvips variants + ThumbHash, content keys; ffmpeg posters and previews *(M5)*. |
+| `db` | SQLite (single file in cache dir) with embedded migrations. |
+| `pages` | Page queries and view models for the templates. |
 | `server` | axum routers. Private: everything. Public: `/s/{token}/…` only. |
 | `templates/` | askama templates (compiled into the binary). |
-| `static/` *(M3)* | CSS/JS/fonts, embedded and served with content-hashed URLs. |
+| `static/` | CSS/JS/fonts/PhotoSwipe, embedded (`rust-embed`), versioned URLs. |
 
 ## Data flow
 
@@ -42,10 +42,10 @@ a cache, and **serve** that cache over two HTTP listeners.
    Disappeared files are marked missing; unreferenced cache entries are
    garbage-collected later.
 3. **Derivative workers** (bounded pool, CPU-sized; one global ffmpeg
-   semaphore) produce the eager variants into the cache and record them in
+   semaphore) produce all image variants into the cache and record them in
    SQLite. See [cache.md](cache.md).
-4. **Serve** reads SQLite + cache. Large variants (`l`, `x`) are generated on
-   first request, deduplicated, with a negative cache for broken files.
+4. **Serve** reads only SQLite + cache, which live on the SSD; the library
+   HDDs are touched only by scans and original downloads.
 
 ## Key decisions
 

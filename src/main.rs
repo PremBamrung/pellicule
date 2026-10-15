@@ -1,5 +1,10 @@
 mod config;
+mod db;
+mod derive;
 mod library;
+mod meta;
+mod pages;
+mod scan;
 mod server;
 
 use std::path::PathBuf;
@@ -49,6 +54,13 @@ async fn main() -> Result<()> {
     let cli = Cli::parse();
     let config = Config::load(&cli.config)?;
 
+    // One libvips instance for the whole process. Parallelism comes from
+    // processing several files at once, so each operation stays
+    // single-threaded; the operation cache only grows memory during a scan.
+    let vips = libvips::VipsApp::new("pellicule", false)?;
+    vips.concurrency_set(1);
+    vips.cache_set_max(0);
+
     match cli.command {
         Command::Scan => {
             tracing::info!(
@@ -56,13 +68,8 @@ async fn main() -> Result<()> {
                 cache = %config.library.cache.display(),
                 "scanning library"
             );
-            let summary = library::scan(&config.library.root)?;
-            tracing::info!(
-                albums = summary.albums,
-                images = summary.images,
-                videos = summary.videos,
-                "scan complete"
-            );
+            let mut conn = db::open(&config.library.cache)?;
+            scan::run(&config, &mut conn)?;
         }
         Command::Serve => server::run(config).await?,
         Command::Healthcheck => server::healthcheck(&config).await?,

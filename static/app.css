@@ -1,0 +1,246 @@
+/* Pellicule: a gallery wall with museum labels. Neutral greys so the
+   photographs aren't tinted; one muted film-box green for focus. */
+
+@font-face {
+  font-family: "EB Garamond";
+  src: url("/static/fonts/eb-garamond-latin-wght-normal.woff2") format("woff2");
+  font-weight: 400 800;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "EB Garamond";
+  src: url("/static/fonts/eb-garamond-latin-wght-italic.woff2") format("woff2");
+  font-weight: 400 800;
+  font-style: italic;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Inter";
+  src: url("/static/fonts/inter-latin-wght-normal.woff2") format("woff2");
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+:root {
+  --wall: #e9e9e6;
+  --ink: #1d1e1b;
+  --muted: #64645e;
+  --rule: #cfcfca;
+  --accent: #3e7a5a;
+  --viewer: #1a1a19;
+
+  --serif: "EB Garamond", "Iowan Old Style", Georgia, serif;
+  --sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+
+  --gutter: clamp(16px, 4vw, 56px);
+  --gap: 4px;
+  --row: 300px; /* keep in sync with ROW_HEIGHT in src/pages.rs */
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --wall: #1f1f1e;
+    --ink: #e8e6e1;
+    --muted: #9a988f;
+    --rule: #363633;
+    --accent: #7fb898;
+  }
+}
+
+@media (max-width: 720px) {
+  :root { --row: 160px; --gap: 3px; }
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+
+html { background: var(--wall); color: var(--ink); }
+
+body {
+  margin: 0;
+  font: 400 15px/1.5 var(--sans);
+  font-feature-settings: "cv11", "ss03";
+  -webkit-font-smoothing: antialiased;
+}
+
+a { color: inherit; text-decoration: none; }
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+
+img { display: block; max-width: 100%; }
+
+/* ---- masthead -------------------------------------------------------- */
+
+.masthead {
+  padding: 28px var(--gutter) 0;
+}
+
+.wordmark {
+  font: italic 500 20px/1 var(--serif);
+  letter-spacing: 0.01em;
+  color: var(--muted);
+}
+.wordmark:hover { color: var(--ink); }
+
+main { padding: 0 0 96px; }
+
+/* ---- album covers ---------------------------------------------------- */
+
+.albums {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 72px 40px;
+  padding: 56px var(--gutter) 24px;
+}
+
+.albums-nested {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 40px 28px;
+  padding-top: 8px;
+  padding-bottom: 48px;
+}
+
+@media (max-width: 720px) {
+  .albums, .albums-nested { grid-template-columns: 1fr; gap: 48px; }
+}
+
+.album-card { display: block; }
+
+.album-cover {
+  display: block;
+  aspect-ratio: 3 / 2;
+  overflow: hidden;
+}
+.album-cover img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: opacity 400ms ease;
+}
+.album-card:hover .album-cover img { opacity: 0.88; }
+
+.album-card-title {
+  display: block;
+  margin-top: 18px;
+  font: 400 clamp(26px, 3vw, 34px)/1.1 var(--serif);
+  letter-spacing: -0.005em;
+}
+
+.album-card-summary,
+.album-summary {
+  display: block;
+  margin-top: 6px;
+  color: var(--muted);
+  font-size: 14px;
+  font-variant-numeric: oldstyle-nums;
+}
+
+/* ---- album page ------------------------------------------------------ */
+
+.album-head {
+  padding: 64px var(--gutter) 40px;
+  max-width: 60rem;
+}
+
+.crumbs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 0;
+  margin-bottom: 14px;
+  font-size: 14px;
+  color: var(--muted);
+}
+.crumbs a:hover { color: var(--ink); }
+.crumbs a::after { content: "/"; padding: 0 0.6em; color: var(--rule); }
+
+.album-title {
+  margin: 0;
+  font: 400 clamp(44px, 7vw, 88px)/0.95 var(--serif);
+  letter-spacing: -0.02em;
+  view-transition-name: album-title;
+}
+
+.album-summary { margin-top: 18px; font-size: 15px; }
+
+/* ---- justified grid: rows of equal height, widths proportional to the
+   aspect ratio; the last row keeps its natural size. ------------------- */
+
+.grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--gap);
+  padding: 0 var(--gap);
+}
+.grid::after {
+  content: "";
+  flex-grow: 1000000;
+}
+
+.tile {
+  flex: calc(var(--ar) * 100) 1 calc(var(--ar) * var(--row));
+  position: relative;
+  overflow: hidden;
+}
+.tile img {
+  width: 100%;
+  height: auto;
+  aspect-ratio: var(--ar);
+}
+.tile:focus-visible { outline-offset: -2px; }
+
+/* ---- empty state ----------------------------------------------------- */
+
+.empty {
+  padding: 18vh var(--gutter);
+  max-width: 34rem;
+}
+.empty h1 {
+  margin: 0 0 16px;
+  font: 400 44px/1.05 var(--serif);
+}
+.empty p { color: var(--muted); }
+
+/* ---- viewer (PhotoSwipe) with a museum label ------------------------- */
+
+html .pswp { /* beats photoswipe.css, which loads later */
+  --pswp-bg: var(--viewer);
+  --pswp-icon-color: #d9d7d2;
+  --pswp-icon-color-secondary: #1a1a19;
+}
+
+.pswp__label {
+  position: absolute;
+  left: 24px;
+  bottom: 22px;
+  max-width: min(36rem, calc(100vw - 48px));
+  color: #d9d7d2;
+  font: 400 13px/1.45 var(--sans);
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+  transition: opacity 200ms ease;
+}
+.pswp__label-date {
+  font: italic 400 17px/1.3 var(--serif);
+  color: #f0eee9;
+}
+.pswp__label-gear { margin-top: 4px; }
+.pswp__label-exposure { color: #a9a79f; }
+.pswp__label[hidden] { display: block; opacity: 0; }
+
+@media (max-width: 720px) {
+  .pswp__label { left: 16px; bottom: 14px; font-size: 12px; }
+  .pswp__label-date { font-size: 15px; }
+}
+
+/* ---- page transitions ------------------------------------------------ */
+
+@view-transition { navigation: auto; }
+
+@media (prefers-reduced-motion: reduce) {
+  @view-transition { navigation: none; }
+  .album-cover img { transition: none; }
+}

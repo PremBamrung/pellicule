@@ -1,0 +1,12 @@
+<a class="album-card" href="{{ album.href }}">
+  {% if let Some(cover) = album.cover %}
+  <span class="album-cover" style="--ar: {{ cover.aspect }}; background-color: {{ cover.background }}">
+    <img src="{{ cover.view_url }}" srcset="{{ cover.cover_srcset }}"
+         sizes="(max-width: 720px) 100vw, 50vw"
+         width="{{ cover.thumb_width }}" height="{{ cover.thumb_height }}"
+         loading="{% if loop.index0 < 4 %}eager{% else %}lazy{% endif %}" decoding="async" alt="">
+  </span>
+  {% endif %}
+  <span class="album-card-title">{{ album.title }}</span>
+  <span class="album-card-summary">{{ album.summary }}</span>
+</a>

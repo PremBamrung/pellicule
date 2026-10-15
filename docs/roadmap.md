@@ -2,34 +2,29 @@
 
 Milestones are small and each ends with something usable.
 
-## M0 — Scaffold ✅ (in progress)
+## M0 — Scaffold ✅
 
 - Cargo project, CLI (`scan`, `serve`), config file, logging.
 - Docs (this folder).
 - Minimal server that renders a placeholder page.
 
-## M1 — Scan & index
+## Thin slice (M1 + M2 + M3) — browse the library
 
-- Walk the library, apply ignore rules, detect media types.
-- SQLite schema: albums, media, exif, derivatives, shares.
-- Incremental rescan: directory-mtime short-circuit, fast key, partial-BLAKE3
-  content key; empty-root guard; missing files marked, not deleted.
-- Parse `index.md` front matter.
+First visible version, hardened afterwards.
 
-## M2 — Derivatives
+- SQLite index (albums, media, standard EXIF), incremental scan with fast-key
+  skip, partial-BLAKE3 content keys, empty-root guard, missing files marked.
+- libvips: all four WebP variants at scan time, ThumbHash + average colour.
+- Pages: home (album covers), album (sub-albums + justified grid), viewer
+  (PhotoSwipe, zoom loads 4096 only on demand, museum-style label).
+- Background scan when `serve` starts.
 
-- libvips pipeline: `t`/`m` eager at scan, `l`/`x` lazy with single-flight and
-  negative cache; orientation applied, metadata stripped, colour-managed
-  (incl. Fuji Adobe RGB without ICC).
-- ThumbHash + average colour + display dimensions per image.
-- Bounded parallelism; resumable; garbage collection of stale cache entries.
-- Startup format probe.
+## Hardening (rest of M1–M3)
 
-## M3 — Browse (private listener)
-
-- Home, album grid (server-side justified layout), sub-albums.
-- PhotoSwipe viewer with progressive loading.
-- Immutable, content-addressed derivative URLs; ETags for HTML.
+- `index.md` front matter (title, cover, order, hidden).
+- Rescans: filesystem watcher, rescan button + CLI, nightly sweep.
+- Directory-mtime short-circuit, garbage collection of stale derivatives.
+- Colour edge cases (Fuji Adobe RGB without ICC), startup format probe.
 
 ## M4 — EXIF
 

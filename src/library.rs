@@ -3,8 +3,7 @@
 
 use std::path::Path;
 
-use anyhow::Result;
-use walkdir::WalkDir;
+use walkdir::DirEntry;
 
 /// A directory containing one of these files is hidden along with its children.
 const IGNORE_MARKERS: &[&str] = &[".pellicule-ignore", ".nomedia"];
@@ -38,53 +37,14 @@ pub fn is_ignored_name(name: &str) -> bool {
     name.starts_with('.') || name.starts_with('_') || JUNK_NAMES.contains(&name)
 }
 
-#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
-pub struct ScanSummary {
-    pub albums: usize,
-    pub images: usize,
-    pub videos: usize,
-}
-
-/// Walks the library and counts what it would index.
-/// Placeholder for M1: no database, no derivatives yet.
-pub fn scan(root: &Path) -> Result<ScanSummary> {
-    let mut summary = ScanSummary::default();
-
-    let walker = WalkDir::new(root).follow_links(false).into_iter();
-    let entries = walker.filter_entry(|entry| {
-        if entry.depth() == 0 {
-            return true;
-        }
-        let name = entry.file_name().to_string_lossy();
-        if is_ignored_name(&name) {
-            return false;
-        }
-        !(entry.file_type().is_dir()
+/// Whether a walked entry (and, for directories, everything below it) is
+/// excluded from the gallery.
+pub fn is_ignored(entry: &DirEntry) -> bool {
+    is_ignored_name(&entry.file_name().to_string_lossy())
+        || (entry.file_type().is_dir()
             && IGNORE_MARKERS
                 .iter()
                 .any(|marker| entry.path().join(marker).exists()))
-    });
-
-    for entry in entries {
-        let entry = entry?;
-        if entry.file_type().is_dir() {
-            let has_media = std::fs::read_dir(entry.path())?.flatten().any(|child| {
-                !is_ignored_name(&child.file_name().to_string_lossy())
-                    && media_kind(&child.path()).is_some()
-            });
-            if has_media {
-                summary.albums += 1;
-            }
-            continue;
-        }
-        match media_kind(entry.path()) {
-            Some(MediaKind::Image) => summary.images += 1,
-            Some(MediaKind::Video) => summary.videos += 1,
-            None => {}
-        }
-    }
-
-    Ok(summary)
 }
 
 #[cfg(test)]

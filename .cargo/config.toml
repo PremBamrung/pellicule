@@ -1,0 +1,3 @@
+# Homebrew installs libvips outside the default linker search path on macOS.
+[target.'cfg(target_os = "macos")']
+rustflags = ["-L", "/opt/homebrew/lib"]

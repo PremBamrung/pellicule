@@ -1,6 +1,6 @@
 .git
 target
-samples
+samples*
 cache
 .env
 pellicule.toml

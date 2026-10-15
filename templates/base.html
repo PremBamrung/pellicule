@@ -5,17 +5,14 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="dark light">
   <title>{% block title %}Pellicule{% endblock %}</title>
-  <style>
-    :root { --bg: #111; --fg: #e8e6e1; --muted: #8a8780; }
-    @media (prefers-color-scheme: light) { :root { --bg: #f5f4f0; --fg: #1a1a1a; --muted: #6b6860; } }
-    body { margin: 0; background: var(--bg); color: var(--fg);
-           font: 16px/1.5 ui-sans-serif, system-ui, sans-serif; }
-    main { max-width: 72rem; margin: 0 auto; padding: 4rem 1.5rem; }
-    h1 { font: 400 2.5rem/1.1 ui-serif, Georgia, serif; letter-spacing: .01em; margin: 0 0 .5rem; }
-    .muted { color: var(--muted); }
-  </style>
+  <link rel="preload" href="/static/fonts/eb-garamond-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="{{ layout.css_url }}">
+  <script type="module" src="{{ layout.js_url }}"></script>
 </head>
 <body>
+  <header class="masthead">
+    <a class="wordmark" href="/">Pellicule</a>
+  </header>
   <main>{% block content %}{% endblock %}</main>
 </body>
 </html>

@@ -9,7 +9,7 @@ never written to. Deleting the cache is always safe; it only costs a rescan.
 ├── d/ab/cd/<key>-t.v1.webp grid thumbnail
 ├── d/ab/cd/<key>-m.v1.webp grid 2× / cover
 ├── d/ab/cd/<key>-l.v1.webp viewer
-├── d/ab/cd/<key>-x.v1.webp zoom (lazy)
+├── d/ab/cd/<key>-x.v1.webp zoom
 ├── d/ab/cd/<key>-p.v1.webp video poster
 └── d/ab/cd/<key>-v720.v1.mp4  video preview
 ```
@@ -35,9 +35,14 @@ All variants fit inside a long-edge box, never upscale, and have orientation app
 |---|---|---|---|---|---|
 | `t` | 480 | WebP q75 | Scan (eager) | 15–35 KB | Grid tiles |
 | `m` | 960 | WebP q78 | Scan (eager) | 60–120 KB | Grid on 2× screens, album covers |
-| `l` | 2048 | WebP q80, 4:4:4 chroma | First request (lazy) | 250–500 KB | Viewer; **largest variant on public shares** |
-| `x` | 4096 | WebP q82 | First request (lazy) | 1–2 MB | Zoom on the private side |
-| original | — | as-is | — | — | Private side, or shares with `allow_download` |
+| `l` | 2048 | WebP q80, 4:4:4 chroma | Scan (eager) | 250–500 KB | Viewer; **largest variant on public shares** |
+| `x` | 4096 | WebP q82, 4:4:4 chroma | Scan (eager) | 1–2 MB | Zoom on the private side |
+| original | — | as-is | — | — | Download only (private side, or shares with `allow_download`) |
+
+**Why everything is eager:** the library lives on HDDs that spin down, the
+cache on the NAS SSD. With every variant generated at scan time, browsing,
+viewing and zooming never wake the disks; only a scan or an original download
+does. Budget roughly 2–2.5 MB of SSD per photo for all four variants.
 
 Plus, per image, stored in SQLite:
 - **ThumbHash** (~25 bytes) and **average colour**: placeholder and tile background.
@@ -51,7 +56,8 @@ roughly 10× faster, which matters on NAS CPUs.
 
 - `vips_thumbnail` with **shrink-on-load**: JPEGs are DCT-downscaled while
   decoding, which is the single biggest speed win on 24–40 MP files.
-- **Decode once, cascade**: `m` is produced first, `t` is made from `m`.
+- **Decode once, cascade**: the original is decoded once into `x` (kept in
+  memory), then `l` is made from `x`, `m` from `l`, `t` from `m`.
 - Metadata is stripped from every derivative (no EXIF, no GPS).
 - **Colour management**:
   - sRGB sources → sRGB, profile stripped (smallest output).
@@ -81,19 +87,25 @@ Done with the `ffmpeg` CLI at scan time, one global ffmpeg semaphore.
 
 ## Generation strategy
 
-- **Eager at scan**: metadata, dimensions, ThumbHash, `t`, `m`, video poster and preview.
-- **Lazy on first request**: `l`, `x`. A single-flight map keyed by
-  `(content key, variant)` prevents duplicate work; a **negative cache** (TTL
-  ~10 min) stops a corrupt file from being retried on every request.
-- CPU-bound work runs on a bounded pool (`cpus − 1`), never on the async runtime.
+- **At scan**: metadata, dimensions, ThumbHash, every image variant, video
+  poster and preview. Files are written to a temporary name and renamed, so a
+  crash never leaves a truncated file behind an immutable URL.
+- If all variants for a content key already exist (a renamed or moved file),
+  nothing is re-encoded; the placeholder is recomputed from the cached `t`.
+- Files are processed in parallel (CPU count − 1 workers, each libvips
+  operation single-threaded); results are committed to SQLite in batches.
+- Failed files are recorded with their error and retried on the next scan.
 
 ## Rescans & safety
 
 - **Directory-mtime short-circuit**: a directory whose mtime hasn't changed has
   had no files added, removed or renamed; only a periodic full stat sweep
   catches in-place edits.
-- Files watched with `notify` when Pellicule runs on the NAS itself; polling
-  otherwise (inotify misses changes made by other NFS/SMB clients).
+- Rescans are triggered by: Pellicule starting, a filesystem watcher
+  (`notify`; it sees changes made on the NAS through the bind mount without
+  polling, so it doesn't wake the disks), a manual rescan (button / CLI), and
+  one nightly full sweep for anything the watcher missed (e.g. edits over SMB).
+  No periodic polling.
 - Missing files are marked `missing_since` rather than deleted, and **a scan
   aborts if the library root is empty or unmounted**. A flaky mount must never
   wipe covers, captions or share links.

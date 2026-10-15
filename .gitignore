@@ -2,5 +2,5 @@
 /cache
 /pellicule.toml
 .DS_Store
-/samples
+/samples*
 /.env
