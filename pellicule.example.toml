@@ -1,0 +1,9 @@
+# Copy to pellicule.toml and adjust.
+
+[library]
+root  = "/photos"               # mounted read-only; never written to
+cache = "/var/lib/pellicule"    # previews, transcoded videos, SQLite index
+
+[server]
+private_addr = "0.0.0.0:8080"   # full gallery, LAN / tailnet
+public_addr  = "127.0.0.1:8081" # share links only: `tailscale funnel 8081`
