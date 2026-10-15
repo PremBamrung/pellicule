@@ -93,9 +93,12 @@ lazily when the viewer opens.
 
 ## Pages
 
-- **Home** — opens on one random landscape photograph (new on each visit),
-  framed inside the page margins at about half the screen height, with its
-  album and date underneath; then a line of library stats ("2 albums, 200
+- **Home** — opens on six random landscape photographs (new on each visit)
+  crossfading every 6 s, framed inside the page margins at about half the
+  screen height, with the album and date underneath and dots to pick one.
+  It pauses on hover, focus and in background tabs, and doesn't move with
+  reduced motion. A photo links to its album at that photo (`#p=<key>`:
+  scrolled to it, with a ring that fades out). Then a line of library stats ("2 albums, 200
   photographs, 2023–2025") and the album covers, most recent first.
 - **Album** — the title, a summary, then the toolbar:
   filters on the left, grid density **S / M / L** on the right (remembered

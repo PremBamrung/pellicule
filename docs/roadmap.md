@@ -48,6 +48,10 @@ X-T3/X-E3 JPEGs) and is ready to be tried on the NAS with Docker Compose.
 - One scan at a time; `scan_run` history; `[scan] workers` (default half the
   cores) and low-priority workers on Linux; `scan --rebuild`.
 
+### Frontend pass 3
+- Home photos: six random photos crossfading, each linking to its place in
+  the album (`/a/<album>#p=<key>`).
+
 ### Frontend pass 2
 - Geist throughout, large tight titles.
 - Home opens on a random photograph (framed, about half the screen), then

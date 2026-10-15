@@ -21,19 +21,24 @@ pub struct Layout {
 #[template(path = "home.html")]
 pub struct HomePage<'a> {
     pub layout: &'a Layout,
-    pub hero: Option<Hero>,
+    /// A few random photos, shown one after the other.
+    pub heroes: Vec<Hero>,
     /// "2 albums, 200 photographs, 2023–2025"
     pub stats: String,
     pub albums: Vec<AlbumCard>,
     pub tiles: Vec<Tile>,
 }
 
-/// The large photo that opens the home page, picked at random.
+/// One of the large photos that open the home page, picked at random.
 pub struct Hero {
     pub tile: Tile,
+    /// The photo in its album: `/a/Japon#p=<key>`.
+    pub href: String,
     pub album_href: String,
     pub album_title: String,
 }
+
+const HERO_COUNT: usize = 6;
 
 #[derive(Template)]
 #[template(path = "album.html")]
@@ -107,6 +112,8 @@ pub struct AlbumCard {
 }
 
 pub struct Tile {
+    /// Content key: names the derivatives, and `#p=<key>` links to the tile.
+    pub key: String,
     pub aspect: String,
     pub background: String,
     pub sizes: String,
@@ -147,38 +154,39 @@ pub fn home<'a>(conn: &Connection, layout: &'a Layout) -> Result<HomePage<'a>> {
     };
     Ok(HomePage {
         layout,
-        hero: hero(conn)?,
+        heroes: heroes(conn)?,
         stats: library_stats(conn)?,
         albums,
         tiles,
     })
 }
 
-/// A random landscape photo from the whole library, new on every visit.
-fn hero(conn: &Connection) -> Result<Option<Hero>> {
-    Ok(conn
-        .query_row(
-            &format!(
-                "SELECT {MEDIA_COLUMNS}, a.rel_path, a.name
-                 FROM media m JOIN album a ON a.id = m.album_id
-                 WHERE {VISIBLE} AND m.width > m.height
-                 ORDER BY random() LIMIT 1"
-            ),
-            [],
-            |r| {
-                let rel_path: String = r.get(15)?;
-                Ok(Hero {
-                    tile: tile_from_row(r)?,
-                    album_href: if rel_path.is_empty() {
-                        "/".into()
-                    } else {
-                        album_href(&rel_path)
-                    },
-                    album_title: r.get(16)?,
-                })
-            },
-        )
-        .optional()?)
+/// Random landscape photos from the whole library, new on every visit.
+fn heroes(conn: &Connection) -> Result<Vec<Hero>> {
+    let mut stmt = conn.prepare(&format!(
+        "SELECT {MEDIA_COLUMNS}, a.rel_path, a.name
+         FROM media m JOIN album a ON a.id = m.album_id
+         WHERE {VISIBLE} AND m.width > m.height
+         ORDER BY random() LIMIT {HERO_COUNT}"
+    ))?;
+    let heroes = stmt
+        .query_map([], |r| {
+            let rel_path: String = r.get(15)?;
+            let tile = tile_from_row(r)?;
+            let album_href = if rel_path.is_empty() {
+                "/".into()
+            } else {
+                album_href(&rel_path)
+            };
+            Ok(Hero {
+                href: format!("{album_href}#p={}", tile.key),
+                tile,
+                album_href,
+                album_title: r.get(16)?,
+            })
+        })?
+        .collect::<rusqlite::Result<_>>()?;
+    Ok(heroes)
 }
 
 fn library_stats(conn: &Connection) -> Result<String> {
@@ -459,6 +467,7 @@ fn tile_from_row(row: &Row) -> rusqlite::Result<Tile> {
     }
 
     Ok(Tile {
+        key: key.clone(),
         aspect: format!("{aspect:.4}"),
         background: format!("#{avg_rgb:06x}"),
         sizes: format!("{}px", (aspect * ROW_HEIGHT).round()),

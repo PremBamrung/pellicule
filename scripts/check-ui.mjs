@@ -85,9 +85,29 @@ try {
   check("home is white by default", (await ev(`getComputedStyle(document.documentElement).backgroundColor`)) === "rgb(255, 255, 255)");
   check("Geist loaded", await ev(`document.fonts.check("500 16px Geist")`));
   check("home photo", await ev(`!!document.querySelector(".hero img")`));
+  const slides = await ev(`document.querySelectorAll(".hero-slide").length`);
   const hrefs = await ev(`[...document.querySelectorAll(".album-card")].map(a => a.getAttribute("href"))`);
   check("album cards", hrefs.length > 0, hrefs.join(", "));
   await shot("home");
+  if (slides > 1) {
+    check("home photo dots", await ev(`!document.querySelector(".hero-dots").hidden`), `${slides} photos`);
+    await sleep(7000);
+    check("home photos crossfade", await ev(`document.querySelectorAll(".hero-slide")[1].classList.contains("is-current")`));
+    check(
+      "caption follows the photo",
+      await ev(`document.querySelector(".hero-caption a").textContent === document.querySelector(".hero-slide.is-current").dataset.album`),
+    );
+  }
+
+  // A home photo lands on that photo in its album.
+  const photoHref = await ev(`document.querySelector(".hero-slide.is-current")?.getAttribute("href")`);
+  if (photoHref?.includes("#p=")) {
+    await go(photoHref);
+    const rect = await ev(`(() => { const r = document.querySelector(".tile.is-target")?.getBoundingClientRect(); return r && [r.top, r.bottom, innerHeight]; })()`);
+    check("home photo opens its album", (await ev("location.pathname")) === photoHref.split("#")[0]);
+    check("lands on the photo", !!rect && rect[0] >= 0 && rect[1] <= rect[2], JSON.stringify(rect));
+    await shot("landing");
+  }
 
   // Prefer an album with several days, so filters and day sections apply.
   let albumHref = hrefs[0];
@@ -132,6 +152,7 @@ try {
   await sleep(4500);
   check("slideshow advances", (await ev(`document.querySelector(".pswp__counter").textContent`)).startsWith("2 /"));
   await ev(`document.querySelector(".pswp__button--play").click()`);
+
   await ev(`document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }))`);
   await sleep(800);
 

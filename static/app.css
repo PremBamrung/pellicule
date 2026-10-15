@@ -133,18 +133,30 @@ img { display: block; max-width: 100%; }
 
 main { padding-bottom: 120px; }
 
-/* ---- home: one large photograph, then the collection ----------------- */
+/* ---- home: a few large photographs crossfading, then the collection - */
 
 /* Framed inside the page margins, about half the screen high. */
 .hero { margin: 8px var(--gutter) 0; }
 
 .hero-frame {
-  display: block;
+  position: relative;
   height: min(46vh, 42vw);
   min-height: 220px;
   overflow: hidden;
 }
-.hero-frame img {
+/* Stacked; only the current one is visible and clickable. */
+.hero-slide {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 1400ms ease;
+}
+.hero-slide.is-current {
+  opacity: 1;
+  pointer-events: auto;
+}
+.hero-slide img {
   width: 100%;
   height: 100%;
   object-fit: cover;
@@ -159,6 +171,35 @@ main { padding-bottom: 120px; }
   color: var(--muted);
 }
 .hero-caption a { color: var(--ink); font-weight: 500; }
+
+.hero-dots {
+  display: flex;
+  gap: 2px;
+  margin-left: auto;
+}
+.hero-dots[hidden] { display: none; }
+/* 24 px hit area around a 6 px dot. */
+.hero-dots button {
+  width: 24px;
+  height: 20px;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+}
+.hero-dots button::before {
+  content: "";
+  display: block;
+  width: 6px;
+  height: 6px;
+  margin: auto;
+  border-radius: 50%;
+  background: var(--muted);
+  opacity: 0.35;
+  transition: opacity 300ms ease;
+}
+.hero-dots button:hover::before { opacity: 0.7; }
+.hero-dots button[aria-current="true"]::before { background: var(--ink); opacity: 1; }
 
 .collection { padding-top: clamp(48px, 6vw, 88px); }
 
@@ -393,6 +434,18 @@ main { padding-bottom: 120px; }
   aspect-ratio: var(--ar);
 }
 .tile:focus-visible { outline-offset: -2px; }
+
+/* Landing on a photo from a link (`#p=<key>`): a ring that fades out. */
+.tile.is-target::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  /* Two tones, so it shows on dark and light photos alike. */
+  box-shadow: inset 0 0 0 3px var(--ink), inset 0 0 0 5px var(--wall);
+  animation: target-fade 1200ms ease 1400ms forwards;
+  pointer-events: none;
+}
+@keyframes target-fade { to { opacity: 0; } }
 .tile[hidden] { display: none; }
 
 /* ---- empty state ----------------------------------------------------- */
@@ -540,5 +593,5 @@ html .pswp .pswp__counter { color: var(--viewer-muted); text-shadow: none; }
 
 @media (prefers-reduced-motion: reduce) {
   @view-transition { navigation: none; }
-  .album-cover img, .js .ph img { transition: none; }
+  .album-cover img, .js .ph img, .hero-slide { transition: none; }
 }

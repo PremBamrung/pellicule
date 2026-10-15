@@ -8,6 +8,9 @@ const remember = (key, value) => {
   } catch {}
 };
 
+// `#p=<key>` names a photo to land on. Read before the filters rewrite the URL.
+const landing = new URLSearchParams(location.hash.slice(1)).get("p");
+
 // ---- placeholders: blurred ThumbHash behind each photo, then a fade-in ---
 
 const decode = (element) => {
@@ -39,6 +42,88 @@ for (const element of document.querySelectorAll(".ph")) {
   else {
     img.addEventListener("load", () => img.classList.add("is-loaded"), { once: true });
     img.addEventListener("error", () => img.classList.add("is-loaded"), { once: true });
+  }
+}
+
+// ---- home: a few random photos, crossfading -----------------------------
+
+const hero = document.querySelector(".hero");
+if (hero) {
+  const slides = [...hero.querySelectorAll(".hero-slide")];
+  const albumLink = hero.querySelector(".hero-caption a");
+  const date = hero.querySelector(".hero-caption > span:not(.hero-dots)");
+  const dots = [...hero.querySelectorAll(".hero-dots button")];
+  const still = matchMedia("(prefers-reduced-motion: reduce)");
+  let current = 0;
+  let timer = null;
+  let paused = false;
+
+  // The next photos only start loading when they are about to show.
+  const load = (slide) => {
+    const img = slide.querySelector("img");
+    if (img.dataset.src) {
+      img.srcset = img.dataset.srcset;
+      img.src = img.dataset.src;
+      delete img.dataset.src;
+      delete img.dataset.srcset;
+    }
+    return img.decode().catch(() => {});
+  };
+
+  const show = (index) => {
+    slides.forEach((slide, i) => {
+      const on = i === index;
+      slide.classList.toggle("is-current", on);
+      slide.toggleAttribute("aria-hidden", !on);
+      if (on) slide.removeAttribute("tabindex");
+      else slide.tabIndex = -1;
+    });
+    dots.forEach((dot, i) => dot.setAttribute("aria-current", String(i === index)));
+    const slide = slides[index];
+    albumLink.textContent = slide.dataset.album;
+    albumLink.href = slide.dataset.albumHref;
+    date.textContent = slide.dataset.date;
+    current = index;
+  };
+
+  // Every 6 s, once the next photo is decoded; never while hovered,
+  // focused, in a background tab, or when reduced motion is asked for.
+  const schedule = () => {
+    clearTimeout(timer);
+    if (paused || document.hidden || still.matches) return;
+    timer = setTimeout(async () => {
+      const next = (current + 1) % slides.length;
+      await load(slides[next]);
+      if (!paused && !document.hidden) show(next);
+      schedule();
+    }, 6000);
+  };
+  const pause = () => {
+    paused = true;
+    clearTimeout(timer);
+  };
+  const resume = () => {
+    paused = false;
+    schedule();
+  };
+
+  if (slides.length > 1) {
+    hero.addEventListener("mouseenter", pause);
+    hero.addEventListener("mouseleave", resume);
+    hero.addEventListener("focusin", pause);
+    hero.addEventListener("focusout", (event) => {
+      if (!hero.contains(event.relatedTarget)) resume();
+    });
+    document.addEventListener("visibilitychange", schedule);
+    dots.forEach((dot, i) =>
+      dot.addEventListener("click", async () => {
+        await load(slides[i]);
+        show(i);
+      }),
+    );
+    hero.querySelector(".hero-dots").hidden = false;
+    // Start counting once the first photo is in.
+    load(slides[0]).then(schedule);
   }
 }
 
@@ -133,6 +218,7 @@ if (photos) {
         pswp.on("close", stop);
       },
     });
+
   });
 
   lightbox.init();
@@ -293,6 +379,19 @@ if (filters && photos) {
 
   filters.hidden = false;
   apply();
+}
+
+// ---- landing on a photo: scroll to it and ring it briefly -----------------
+
+if (landing && photos) {
+  const tile = photos.querySelector(`a.tile[data-key="${CSS.escape(landing)}"]`);
+  if (tile) {
+    // A filter from the URL could hide it.
+    if (tile.hidden) document.querySelector(".filter-clear")?.click();
+    tile.scrollIntoView({ block: "center" });
+    tile.classList.add("is-target");
+    tile.addEventListener("animationend", () => tile.classList.remove("is-target"), { once: true });
+  }
 }
 
 // ---- library page: start, cancel and follow scans -----------------------
