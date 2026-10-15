@@ -26,6 +26,10 @@ use crate::scan::{ScanControl, ScanOptions, Trigger};
 use crate::{db, derive, scan};
 
 pub async fn run(config: Config) -> Result<()> {
+    // Bind first: a busy port fails here, before a scan has started.
+    let private_listener = bind(config.server.private_addr, "private").await?;
+    let public_listener = bind(config.server.public_addr, "public").await?;
+
     let conn = db::open(&config.library.cache)?;
     scan::mark_interrupted(&conn)?;
     let state = AppState {
@@ -48,14 +52,21 @@ pub async fn run(config: Config) -> Result<()> {
         },
     );
 
-    let private = serve(config.server.private_addr, private_router(state), "private");
-    let public = serve(config.server.public_addr, public_router(), "public");
+    let scanner = state.scanner.clone();
+    let private = serve(private_listener, private_router(state));
+    let public = serve(public_listener, public_router());
 
     tokio::select! {
         result = private => result,
         result = public => result,
         _ = shutdown_signal() => {
-            tracing::info!("shutting down");
+            // The runtime waits for the scan thread before the process exits:
+            // cancelling lets it stop after the files in progress.
+            if scanner.cancel() {
+                tracing::info!("shutting down, cancelling the scan");
+            } else {
+                tracing::info!("shutting down");
+            }
             Ok(())
         }
     }
@@ -111,11 +122,15 @@ pub async fn healthcheck(config: &Config) -> Result<()> {
     Ok(())
 }
 
-async fn serve(addr: SocketAddr, router: Router, name: &str) -> Result<()> {
+async fn bind(addr: SocketAddr, name: &str) -> Result<TcpListener> {
     let listener = TcpListener::bind(addr)
         .await
         .with_context(|| format!("binding {name} listener on {addr}"))?;
     tracing::info!(%addr, "{name} listener ready");
+    Ok(listener)
+}
+
+async fn serve(listener: TcpListener, router: Router) -> Result<()> {
     axum::serve(listener, router).await?;
     Ok(())
 }

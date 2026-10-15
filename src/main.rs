@@ -64,6 +64,10 @@ async fn main() -> Result<()> {
     let vips = libvips::VipsApp::new("pellicule", false)?;
     vips.concurrency_set(1);
     vips.cache_set_max(0);
+    // Never dropped: dropping it calls `vips_shutdown`, and when `main`
+    // returns (an error, Ctrl-C, `docker stop`) scan workers may still be
+    // inside libvips. The OS reclaims everything at exit.
+    std::mem::forget(vips);
 
     match cli.command {
         Command::Scan { rebuild } => {
