@@ -80,3 +80,8 @@ Requires Rust (stable), libvips and ffmpeg.
 brew install rustup vips ffmpeg   # macOS
 cargo run -- serve --config pellicule.example.toml
 ```
+
+## License
+
+MIT — see [LICENSE](LICENSE). Ideas borrowed from other projects are credited
+in [docs/inspirations.md](docs/inspirations.md).
