@@ -51,6 +51,31 @@ pub struct FilterOption {
     pub count: usize,
 }
 
+#[derive(Template)]
+#[template(path = "library.html")]
+pub struct LibraryPage<'a> {
+    pub layout: &'a Layout,
+    pub summary: String,
+    pub runs: Vec<ScanRun>,
+    pub failures: Vec<Failure>,
+}
+
+pub struct ScanRun {
+    pub started: String,
+    pub trigger: String,
+    pub status: String,
+    pub duration: String,
+    pub processed: String,
+    pub failed: String,
+    pub missing: String,
+    pub error: String,
+}
+
+pub struct Failure {
+    pub path: String,
+    pub error: String,
+}
+
 pub struct Crumb {
     pub href: String,
     pub name: String,
@@ -461,6 +486,141 @@ fn body(make: Option<&str>, model: Option<&str>) -> String {
     }
 }
 
+pub fn library<'a>(
+    conn: &Connection,
+    layout: &'a Layout,
+    cache: &std::path::Path,
+) -> Result<LibraryPage<'a>> {
+    let (albums, photos): (i64, i64) = conn.query_row(
+        "SELECT count(DISTINCT m.album_id), count(*) FROM media m JOIN album a ON a.id = m.album_id
+         WHERE m.missing_since IS NULL AND a.missing_since IS NULL
+           AND m.error IS NULL AND m.content_key IS NOT NULL",
+        [],
+        |r| Ok((r.get(0)?, r.get(1)?)),
+    )?;
+    let last_scan: Option<i64> = conn.query_row(
+        "SELECT max(finished_at) FROM scan_run WHERE status = 'done'",
+        [],
+        |r| r.get(0),
+    )?;
+
+    let mut summary = format!(
+        "{albums} {}, {photos} {}, {} of previews on disk.",
+        if albums == 1 { "album" } else { "albums" },
+        if photos == 1 {
+            "photograph"
+        } else {
+            "photographs"
+        },
+        format_bytes(dir_size(&cache.join("d"))),
+    );
+    if let Some(ts) = last_scan {
+        summary.push_str(&format!(" Last complete scan {}.", format_timestamp(ts)));
+    }
+
+    let mut stmt = conn.prepare(
+        "SELECT started_at, finished_at, trigger, rebuild, status, processed, failed, missing, error
+         FROM scan_run ORDER BY id DESC LIMIT 20",
+    )?;
+    let runs = stmt
+        .query_map([], |r| {
+            let started: i64 = r.get(0)?;
+            let finished: Option<i64> = r.get(1)?;
+            let trigger: String = r.get(2)?;
+            let rebuild: bool = r.get(3)?;
+            let number = |v: Option<i64>| v.map(|n| n.to_string()).unwrap_or_default();
+            Ok(ScanRun {
+                started: format_timestamp(started),
+                trigger: match (trigger.as_str(), rebuild) {
+                    ("startup", _) => "On start".into(),
+                    ("cli", true) => "Command line, rebuild".into(),
+                    ("cli", false) => "Command line".into(),
+                    (_, true) => "Rebuild".into(),
+                    _ => "Rescan".into(),
+                },
+                status: r.get::<_, String>(4)?,
+                duration: finished
+                    .map(|f| format_duration(f - started))
+                    .unwrap_or_default(),
+                processed: number(r.get(5)?),
+                failed: number(r.get(6)?),
+                missing: number(r.get(7)?),
+                error: r.get::<_, Option<String>>(8)?.unwrap_or_default(),
+            })
+        })?
+        .collect::<rusqlite::Result<_>>()?;
+
+    let mut stmt = conn.prepare(
+        "SELECT a.rel_path, m.file_name, m.error FROM media m JOIN album a ON a.id = m.album_id
+         WHERE m.error IS NOT NULL AND m.missing_since IS NULL ORDER BY a.rel_path, m.file_name LIMIT 100",
+    )?;
+    let failures = stmt
+        .query_map([], |r| {
+            let album: String = r.get(0)?;
+            let file: String = r.get(1)?;
+            Ok(Failure {
+                path: if album.is_empty() {
+                    file
+                } else {
+                    format!("{album}/{file}")
+                },
+                error: r.get(2)?,
+            })
+        })?
+        .collect::<rusqlite::Result<_>>()?;
+
+    Ok(LibraryPage {
+        layout,
+        summary,
+        runs,
+        failures,
+    })
+}
+
+fn dir_size(dir: &std::path::Path) -> u64 {
+    walkdir::WalkDir::new(dir)
+        .into_iter()
+        .filter_map(|e| e.ok())
+        .filter(|e| e.file_type().is_file())
+        .filter_map(|e| e.metadata().ok())
+        .map(|m| m.len())
+        .sum()
+}
+
+fn format_bytes(bytes: u64) -> String {
+    const UNITS: [&str; 5] = ["bytes", "KB", "MB", "GB", "TB"];
+    let mut value = bytes as f64;
+    let mut unit = 0;
+    while value >= 1000.0 && unit < UNITS.len() - 1 {
+        value /= 1000.0;
+        unit += 1;
+    }
+    if unit == 0 {
+        format!("{bytes} bytes")
+    } else {
+        format!("{value:.1} {}", UNITS[unit])
+    }
+}
+
+fn format_duration(seconds: i64) -> String {
+    match seconds {
+        s if s < 60 => format!("{s}s"),
+        s if s < 3600 => format!("{}m {:02}s", s / 60, s % 60),
+        s => format!("{}h {:02}m", s / 3600, (s % 3600) / 60),
+    }
+}
+
+/// Local time of the server (set `TZ` in Docker).
+fn format_timestamp(ts: i64) -> String {
+    chrono::DateTime::from_timestamp(ts, 0)
+        .map(|dt| {
+            dt.with_timezone(&chrono::Local)
+                .format("%-d %b %Y, %H:%M")
+                .to_string()
+        })
+        .unwrap_or_default()
+}
+
 /// "760 photographs, March – April 2024"
 fn summary(count: i64, first: Option<&str>, last: Option<&str>) -> String {
     let noun = if count == 1 {
@@ -549,6 +709,15 @@ mod tests {
         assert_eq!(focal_range(35.0).0, "normal");
         assert_eq!(focal_range(84.0).0, "short-tele");
         assert_eq!(focal_range(135.0).0, "tele");
+    }
+
+    #[test]
+    fn human_sizes_and_durations() {
+        assert_eq!(format_bytes(512), "512 bytes");
+        assert_eq!(format_bytes(1_340_000_000), "1.3 GB");
+        assert_eq!(format_duration(42), "42s");
+        assert_eq!(format_duration(125), "2m 05s");
+        assert_eq!(format_duration(7260), "2h 01m");
     }
 
     #[test]

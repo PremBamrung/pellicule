@@ -21,7 +21,7 @@ RUN --mount=type=cache,target=/usr/local/cargo/registry \
 FROM debian:trixie-slim
 
 RUN apt-get update \
- && apt-get install -y --no-install-recommends libvips42t64 ffmpeg ca-certificates tini \
+ && apt-get install -y --no-install-recommends libvips42t64 ffmpeg ca-certificates tini tzdata \
  && rm -rf /var/lib/apt/lists/*
 
 RUN useradd --system --uid 1000 --user-group --no-create-home pellicule \

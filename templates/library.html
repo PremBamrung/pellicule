@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+
+{% block title %}Library · Pellicule{% endblock %}
+
+{% block content %}
+<div class="library">
+  <header class="page-head">
+    <h1 class="page-title">Library</h1>
+    <p class="page-lede">{{ summary }}</p>
+  </header>
+
+  <section class="scan-panel" aria-labelledby="scan-heading">
+    <h2 id="scan-heading" class="section-title">Scan</h2>
+    <p class="scan-help">
+      <strong>Rescan</strong> picks up new, changed and removed photos.
+      <strong>Rebuild everything</strong> reprocesses every photo, metadata and previews, and takes much longer.
+    </p>
+    <div class="scan-actions">
+      <button type="button" class="button" data-scan="rescan">Rescan</button>
+      <button type="button" class="button button-quiet" data-scan="rebuild">Rebuild everything</button>
+      <button type="button" class="button button-quiet" data-scan="cancel" hidden>Cancel scan</button>
+    </div>
+    <div class="scan-progress" hidden>
+      <div class="bar"><span></span></div>
+      <p class="scan-line"></p>
+      <p class="scan-current"></p>
+    </div>
+    <p class="scan-message" role="status"></p>
+  </section>
+
+  <section aria-labelledby="history-heading">
+    <h2 id="history-heading" class="section-title">History</h2>
+    {% if runs.is_empty() %}
+    <p class="muted">No scans yet.</p>
+    {% else %}
+    <div class="table-wrap">
+      <table class="history">
+        <thead>
+          <tr>
+            <th scope="col">Started</th>
+            <th scope="col">Type</th>
+            <th scope="col">Result</th>
+            <th scope="col" class="num">Duration</th>
+            <th scope="col" class="num">Processed</th>
+            <th scope="col" class="num">Failed</th>
+            <th scope="col" class="num">Missing</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for run in runs %}
+          <tr>
+            <td>{{ run.started }}</td>
+            <td>{{ run.trigger }}</td>
+            <td><span class="status status-{{ run.status }}">{{ run.status }}</span>{% if !run.error.is_empty() %}<span class="run-error">{{ run.error }}</span>{% endif %}</td>
+            <td class="num">{{ run.duration }}</td>
+            <td class="num">{{ run.processed }}</td>
+            <td class="num">{{ run.failed }}</td>
+            <td class="num">{{ run.missing }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% endif %}
+  </section>
+
+  {% if !failures.is_empty() %}
+  <section aria-labelledby="failures-heading">
+    <h2 id="failures-heading" class="section-title">Photos that could not be processed</h2>
+    <p class="muted">They are retried on every scan.</p>
+    <ul class="failures">
+      {% for failure in failures %}
+      <li><span class="failure-path">{{ failure.path }}</span><span class="failure-error">{{ failure.error }}</span></li>
+      {% endfor %}
+    </ul>
+  </section>
+  {% endif %}
+</div>
+{% endblock %}

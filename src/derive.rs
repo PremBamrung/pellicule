@@ -120,12 +120,13 @@ pub struct Derived {
 }
 
 /// Produces all variants for `source` unless they already exist for `key`
-/// (e.g. after a rename). Returns display dims and placeholder data.
-pub fn generate(source: &Path, cache: &Path, key: &str) -> Result<Derived> {
+/// (e.g. after a rename) and `force` is false. Returns display dims and
+/// placeholder data.
+pub fn generate(source: &Path, cache: &Path, key: &str, force: bool) -> Result<Derived> {
     let (width, height) = display_dims(source)?;
 
     let smallest = VARIANTS[VARIANTS.len() - 1];
-    let all_present = VARIANTS.iter().all(|v| path(cache, key, *v).exists());
+    let all_present = !force && VARIANTS.iter().all(|v| path(cache, key, *v).exists());
     let smallest_image = if all_present {
         VipsImage::new_from_file(&utf8(&path(cache, key, smallest))?)
             .map_err(|e| vips_error("loading cached thumbnail", e))?

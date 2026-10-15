@@ -10,6 +10,24 @@ pub struct Config {
     pub library: LibraryConfig,
     #[serde(default)]
     pub server: ServerConfig,
+    #[serde(default)]
+    pub scan: ScanConfig,
+}
+
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(deny_unknown_fields, default)]
+pub struct ScanConfig {
+    /// Files processed in parallel. Defaults to half the CPU cores, so a
+    /// scan never takes the whole machine.
+    workers: Option<usize>,
+}
+
+impl ScanConfig {
+    pub fn workers(&self) -> usize {
+        self.workers
+            .unwrap_or_else(|| std::thread::available_parallelism().map_or(1, |n| n.get() / 2))
+            .max(1)
+    }
 }
 
 #[derive(Debug, Clone, Deserialize)]

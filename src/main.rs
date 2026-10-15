@@ -36,7 +36,11 @@ struct Cli {
 #[derive(Subcommand)]
 enum Command {
     /// Index the library and generate derivatives into the cache.
-    Scan,
+    Scan {
+        /// Reprocess every file, not only new or changed ones.
+        #[arg(long)]
+        rebuild: bool,
+    },
     /// Start the private (tailnet) and public (share links) listeners.
     Serve,
     /// Exit 0 if the running server answers on its private listener.
@@ -62,14 +66,21 @@ async fn main() -> Result<()> {
     vips.cache_set_max(0);
 
     match cli.command {
-        Command::Scan => {
+        Command::Scan { rebuild } => {
             tracing::info!(
                 root = %config.library.root.display(),
                 cache = %config.library.cache.display(),
                 "scanning library"
             );
             let mut conn = db::open(&config.library.cache)?;
-            scan::run(&config, &mut conn)?;
+            let options = scan::ScanOptions {
+                trigger: scan::Trigger::Cli,
+                rebuild,
+            };
+            let control = scan::ScanControl::default();
+            control.try_start(options);
+            scan::mark_interrupted(&conn)?;
+            scan::run(&config, &mut conn, options, &control)?;
         }
         Command::Serve => server::run(config).await?,
         Command::Healthcheck => server::healthcheck(&config).await?,

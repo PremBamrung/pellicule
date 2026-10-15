@@ -61,12 +61,12 @@ On the NAS (Docker Compose, Tailscale on the host):
 
 ```sh
 cp .env.example .env              # PHOTOS_DIR, CACHE_DIR, PUID/PGID
-docker compose up -d --build
-docker compose run --rm pellicule scan
+docker compose up -d --build     # scans the library in the background
 sudo tailscale funnel --bg 8081   # public share links
 ```
 
-Private gallery on `http://<nas>:8080` (LAN / tailnet). See [deployment](docs/deployment.md).
+Private gallery on `http://<nas>:8080` (LAN / tailnet); scans are started and
+followed from its **Library** page. See [deployment](docs/deployment.md).
 
 Configuration (`docker/pellicule.toml` in the container, `pellicule.toml` locally):
 

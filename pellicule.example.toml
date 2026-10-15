@@ -7,3 +7,6 @@ cache = "/var/lib/pellicule"    # previews, transcoded videos, SQLite index
 [server]
 private_addr = "0.0.0.0:8080"   # full gallery, LAN / tailnet
 public_addr  = "127.0.0.1:8081" # share links only: `tailscale funnel 8081`
+
+[scan]
+# workers = 2                   # files processed in parallel (default: half the CPU cores)

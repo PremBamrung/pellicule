@@ -3,47 +3,50 @@
 
 use std::collections::HashMap;
 use std::net::{Ipv4Addr, Ipv6Addr, SocketAddr};
-use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use anyhow::{Context, Result, bail};
 use askama::Template;
+use axum::Json;
 use axum::Router;
 use axum::extract::{Path, Query, State};
 use axum::http::{HeaderMap, StatusCode, header};
 use axum::response::{Html, IntoResponse, Response};
-use axum::routing::get;
+use axum::routing::{get, post};
 use rusqlite::Connection;
 use rust_embed::RustEmbed;
+use serde::Deserialize;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
 
 use crate::config::Config;
 use crate::pages::{self, Layout};
+use crate::scan::{ScanControl, ScanOptions, Trigger};
 use crate::{db, derive, scan};
 
 pub async fn run(config: Config) -> Result<()> {
     let conn = db::open(&config.library.cache)?;
+    scan::mark_interrupted(&conn)?;
     let state = AppState {
-        cache: Arc::new(config.library.cache.clone()),
+        config: Arc::new(config.clone()),
         db: Arc::new(Mutex::new(conn)),
         layout: Arc::new(Layout {
             css_url: asset_url("app.css"),
             js_url: asset_url("app.js"),
         }),
+        scanner: Arc::new(ScanControl::default()),
     };
 
     // Index in the background so the gallery is up immediately; pages fill
     // in as the scan commits.
-    let scan_config = config.clone();
-    tokio::task::spawn_blocking(move || {
-        let result = db::open(&scan_config.library.cache)
-            .and_then(|mut conn| scan::run(&scan_config, &mut conn));
-        if let Err(err) = result {
-            tracing::error!("background scan failed: {err:#}");
-        }
-    });
+    start_scan(
+        &state,
+        ScanOptions {
+            trigger: Trigger::Startup,
+            rebuild: false,
+        },
+    );
 
     let private = serve(config.server.private_addr, private_router(state), "private");
     let public = serve(config.server.public_addr, public_router(), "public");
@@ -123,6 +126,10 @@ fn private_router(state: AppState) -> Router {
         .route("/a/{*path}", get(album))
         .route("/d/{file}", get(derivative))
         .route("/static/{*path}", get(static_asset))
+        .route("/library", get(library))
+        .route("/library/status", get(library_status))
+        .route("/library/scan", post(library_scan))
+        .route("/library/cancel", post(library_cancel))
         .route("/healthz", get(|| async { "ok" }))
         .fallback(not_found)
         .with_state(state)
@@ -136,9 +143,28 @@ fn public_router() -> Router {
 
 #[derive(Clone)]
 struct AppState {
-    cache: Arc<PathBuf>,
+    config: Arc<Config>,
     db: Arc<Mutex<Connection>>,
     layout: Arc<Layout>,
+    scanner: Arc<ScanControl>,
+}
+
+/// Starts a scan on the blocking pool; `false` if one is already running.
+fn start_scan(state: &AppState, options: ScanOptions) -> bool {
+    if !state.scanner.try_start(options) {
+        return false;
+    }
+    let config = state.config.clone();
+    let scanner = state.scanner.clone();
+    tokio::task::spawn_blocking(move || {
+        let result = db::open(&config.library.cache)
+            .and_then(|mut conn| scan::run(&config, &mut conn, options, &scanner));
+        if let Err(err) = result {
+            tracing::error!("scan failed: {err:#}");
+        }
+        scanner.finish();
+    });
+    true
 }
 
 #[derive(RustEmbed)]
@@ -235,6 +261,8 @@ async fn derivative(
     }
 
     let path = state
+        .config
+        .library
         .cache
         .join("d")
         .join(&key[0..2])
@@ -295,6 +323,68 @@ fn content_type(path: &str) -> &'static str {
         Some("svg") => "image/svg+xml",
         Some("txt") | Some("md") => "text/plain; charset=utf-8",
         _ => "application/octet-stream",
+    }
+}
+
+async fn library(State(state): State<AppState>) -> Response {
+    let cache = state.config.library.cache.clone();
+    let html = with_db(&state, move |conn, layout| {
+        Ok(pages::library(conn, layout, &cache)?.render()?)
+    })
+    .await;
+    html_response(html)
+}
+
+async fn library_status(State(state): State<AppState>) -> Response {
+    (
+        [(header::CACHE_CONTROL, "no-store")],
+        Json(state.scanner.progress()),
+    )
+        .into_response()
+}
+
+#[derive(Deserialize)]
+struct ScanRequest {
+    #[serde(default)]
+    rebuild: bool,
+}
+
+async fn library_scan(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Json(request): Json<ScanRequest>,
+) -> Response {
+    if !same_origin(&headers) {
+        return StatusCode::FORBIDDEN.into_response();
+    }
+    let options = ScanOptions {
+        trigger: Trigger::Manual,
+        rebuild: request.rebuild,
+    };
+    if start_scan(&state, options) {
+        StatusCode::ACCEPTED.into_response()
+    } else {
+        (StatusCode::CONFLICT, "a scan is already running").into_response()
+    }
+}
+
+async fn library_cancel(State(state): State<AppState>, headers: HeaderMap) -> Response {
+    if !same_origin(&headers) {
+        return StatusCode::FORBIDDEN.into_response();
+    }
+    if state.scanner.cancel() {
+        StatusCode::ACCEPTED.into_response()
+    } else {
+        (StatusCode::CONFLICT, "no scan is running").into_response()
+    }
+}
+
+/// Library actions are only accepted from the gallery's own pages: browsers
+/// send `Sec-Fetch-Site`, so a cross-site form or fetch is refused.
+fn same_origin(headers: &HeaderMap) -> bool {
+    match headers.get("sec-fetch-site").and_then(|v| v.to_str().ok()) {
+        Some(site) => site == "same-origin" || site == "none",
+        None => true, // non-browser clients (curl) don't send it
     }
 }
 

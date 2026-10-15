@@ -47,6 +47,20 @@ a cache, and **serve** that cache over two HTTP listeners.
 4. **Serve** reads only SQLite + cache, which live on the SSD; the library
    HDDs are touched only by scans and original downloads.
 
+## Scans
+
+- One scan at a time, shared by every trigger: server start, the Library page
+  (*Rescan*, *Rebuild everything*), and the `scan` CLI.
+- `ScanControl` holds live progress (phase, done/total, current file, rate,
+  ETA) that the Library page polls every second at `/library/status`, plus a
+  cancel flag checked before each file. A cancelled scan never marks files
+  missing, since it hasn't seen them all.
+- Every run is recorded in the `scan_run` table (trigger, start/end, status,
+  counts, error); runs left `running` by a crash become `interrupted` at the
+  next start.
+- Library actions are POSTs accepted only from the gallery's own pages
+  (`Sec-Fetch-Site`), and exist only on the private listener.
+
 ## Key decisions
 
 | Decision | Choice | Rationale |

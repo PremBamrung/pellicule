@@ -184,6 +184,90 @@ if (filters && grid) {
   apply();
 }
 
+// ---- library page: start, cancel and follow scans -----------------------
+
+const scanPanel = document.querySelector(".scan-panel");
+if (scanPanel) {
+  const buttons = Object.fromEntries(
+    [...scanPanel.querySelectorAll("[data-scan]")].map((b) => [b.dataset.scan, b]),
+  );
+  const progress = scanPanel.querySelector(".scan-progress");
+  const bar = progress.querySelector(".bar");
+  const fill = bar.querySelector("span");
+  const lineText = progress.querySelector(".scan-line");
+  const current = progress.querySelector(".scan-current");
+  const message = scanPanel.querySelector(".scan-message");
+  let wasRunning = false;
+  let timer;
+
+  const minutes = (s) =>
+    s < 60 ? `${Math.max(1, Math.round(s))}s` : s < 3600 ? `${Math.round(s / 60)} min` : `${(s / 3600).toFixed(1)} h`;
+
+  const render = (p) => {
+    buttons.rescan.disabled = buttons.rebuild.disabled = p.running;
+    buttons.cancel.hidden = !p.running;
+    progress.hidden = !p.running;
+    if (p.running) {
+      const finished = p.done + p.failed;
+      const known = p.phase === "processing" && p.total > 0;
+      bar.classList.toggle("indeterminate", !known);
+      fill.style.width = known ? `${(100 * finished) / p.total}%` : "";
+      const what = p.rebuild ? "Rebuilding" : "Scanning";
+      lineText.textContent =
+        p.phase === "walking"
+          ? `${what}: looking for new and changed photos…`
+          : p.phase === "finishing"
+            ? `${what}: finishing…`
+            : p.total === 0
+              ? `${what}: nothing to process.`
+              : [
+                  `${what}: ${finished} of ${p.total} photos`,
+                  p.failed ? `${p.failed} failed` : null,
+                  p.rate ? `${p.rate.toFixed(1)} per second` : null,
+                  p.eta_s ? `about ${minutes(p.eta_s)} left` : null,
+                ]
+                  .filter(Boolean)
+                  .join(", ");
+      current.textContent = p.current;
+    }
+    // When a scan ends, reload so the summary and history are up to date.
+    if (wasRunning && !p.running) location.reload();
+    wasRunning = p.running;
+  };
+
+  const poll = async () => {
+    clearTimeout(timer);
+    try {
+      const response = await fetch("/library/status", { cache: "no-store" });
+      const p = await response.json();
+      render(p);
+      timer = setTimeout(poll, p.running ? 1000 : 5000);
+    } catch {
+      timer = setTimeout(poll, 5000);
+    }
+  };
+
+  const post = async (url, body) => {
+    message.textContent = "";
+    const response = await fetch(url, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(body ?? {}),
+    });
+    if (!response.ok) message.textContent = await response.text();
+    poll();
+  };
+
+  buttons.rescan.addEventListener("click", () => post("/library/scan", { rebuild: false }));
+  buttons.rebuild.addEventListener("click", () => {
+    if (confirm("Reprocess every photo? This can take a long time on a large library.")) {
+      post("/library/scan", { rebuild: true });
+    }
+  });
+  buttons.cancel.addEventListener("click", () => post("/library/cancel"));
+  poll();
+}
+
 function line(className) {
   const div = document.createElement("div");
   div.className = className;

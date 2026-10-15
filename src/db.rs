@@ -9,7 +9,8 @@ use rusqlite::Connection;
 const DB_FILE: &str = "pellicule.db";
 
 /// Each entry upgrades the schema by one version (tracked in `user_version`).
-const MIGRATIONS: &[&str] = &[r#"
+const MIGRATIONS: &[&str] = &[
+    r#"
     CREATE TABLE album (
         id            INTEGER PRIMARY KEY,
         rel_path      TEXT NOT NULL UNIQUE,      -- '' is the library root
@@ -50,7 +51,23 @@ const MIGRATIONS: &[&str] = &[r#"
         UNIQUE (album_id, file_name)
     );
     CREATE INDEX media_album_taken ON media(album_id, taken_at);
-"#];
+"#,
+    r#"
+    CREATE TABLE scan_run (
+        id          INTEGER PRIMARY KEY,
+        trigger     TEXT NOT NULL,                -- startup | manual | cli
+        rebuild     INTEGER NOT NULL,
+        started_at  INTEGER NOT NULL,
+        finished_at INTEGER,
+        status      TEXT NOT NULL,                -- running | done | failed | cancelled | interrupted
+        images      INTEGER,
+        processed   INTEGER,
+        failed      INTEGER,
+        missing     INTEGER,
+        error       TEXT
+    );
+"#,
+];
 
 pub fn open(cache_dir: &Path) -> Result<Connection> {
     std::fs::create_dir_all(cache_dir)

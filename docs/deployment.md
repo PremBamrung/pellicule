@@ -30,9 +30,28 @@ cp .env.example .env        # set PHOTOS_DIR, CACHE_DIR, PUID/PGID
 mkdir -p cache              # if CACHE_DIR=./cache
 docker compose up -d --build
 
-docker compose run --rm pellicule scan    # until serve scans on its own (M1)
 docker compose logs -f
 ```
+
+`serve` scans the library in the background when it starts. Scans can then be
+started, followed and cancelled from the **Library** page
+(`http://<nas>:8080/library`): *Rescan* processes new, changed and removed
+photos, *Rebuild everything* reprocesses all of them. The same from the
+command line, while the server is stopped or idle:
+
+```sh
+docker compose exec pellicule pellicule scan            # changes only
+docker compose exec pellicule pellicule scan --rebuild  # everything
+```
+
+### Scan speed and CPU
+
+A scan processes `[scan] workers` photos in parallel (default: half the CPU
+cores, so 2 on the N100) and, on Linux, runs its workers at low priority
+(`nice 10`) so the gallery and the NAS stay responsive. The first scan of a
+large library takes a while: budget roughly one photo per second per worker
+for 26 MP JPEGs on an N100 (to be measured). Lower `workers` for a gentler
+scan, raise it for a faster one.
 
 Update:
 

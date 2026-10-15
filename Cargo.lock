@@ -874,6 +874,7 @@ dependencies = [
  "blake3",
  "chrono",
  "clap",
+ "libc",
  "libvips",
  "nom-exif",
  "rayon",

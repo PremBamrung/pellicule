@@ -8,3 +8,6 @@ cache = "/cache"
 [server]
 private_addr = "0.0.0.0:8080"   # published on the host for LAN / tailnet
 public_addr  = "0.0.0.0:8081"   # published on host 127.0.0.1 only, for `tailscale funnel`
+
+[scan]
+# workers = 2   # files processed in parallel (default: half the CPU cores)
