@@ -44,6 +44,11 @@ docker compose exec pellicule pellicule scan            # changes only
 docker compose exec pellicule pellicule scan --rebuild  # everything
 ```
 
+Verified on 2026-10-15 with Docker Desktop on a Mac (arm64): image builds,
+health check passes, 200 Fujifilm JPEGs scanned with 2 workers in 3 minutes
+(about 1.8 s per photo per worker), ~216 MB RAM during the scan, all UI
+checks pass. Not yet run on the N100 itself.
+
 ### Scan speed and CPU
 
 A scan processes `[scan] workers` photos in parallel (default: half the CPU

@@ -7,10 +7,15 @@ use std::io::{Read, Seek, SeekFrom};
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result, anyhow, bail};
-use libvips::VipsImage;
-use libvips::ops::{
-    self, ForeignKeep, Size, ThumbnailImageOptions, ThumbnailOptions, WebpsaveOptions,
-};
+use libvips::ops;
+use libvips::{VipsApp, VipsImage};
+
+// libvips compatibility: the Rust bindings are generated for libvips 8.17+
+// and their `*_with_opts` functions send every optional argument by name,
+// including ones renamed since 8.16 (Debian trixie, our Docker image), which
+// then rejects the whole call. So we only use calls without optional
+// arguments, and pass save options in libvips' filename syntax
+// (`file.webp[Q=80,...]`), which sends just the options we write.
 
 /// Bump when sizes, quality or processing change: everything is regenerated.
 pub const PIPELINE_VERSION: i64 = 1;
@@ -131,7 +136,7 @@ pub fn generate(source: &Path, cache: &Path, key: &str, force: bool) -> Result<D
         VipsImage::new_from_file(&utf8(&path(cache, key, smallest))?)
             .map_err(|e| vips_error("loading cached thumbnail", e))?
     } else {
-        write_variants(source, cache, key)?
+        write_variants(source, cache, key, width.max(height))?
     };
 
     let (thumbhash, avg_rgb) = placeholder(&smallest_image)?;
@@ -143,36 +148,23 @@ pub fn generate(source: &Path, cache: &Path, key: &str, force: bool) -> Result<D
     })
 }
 
-fn write_variants(source: &Path, cache: &Path, key: &str) -> Result<VipsImage> {
+/// `long_edge` is the original's long edge: variants never upscale.
+fn write_variants(source: &Path, cache: &Path, key: &str, long_edge: u32) -> Result<VipsImage> {
+    // `thumbnail` fits the image in a `size` × `size` box: the long edge of
+    // the result is `size`.
+    let target = |variant: Variant| variant.long_edge.min(long_edge) as i32;
+
+    // Shrink-on-load and autorotate in one pass, then keep the result in
+    // memory so the smaller sizes don't decode again.
     let largest = VARIANTS[0];
-    // Shrink-on-load, autorotate and colour-manage to sRGB in one pass, then
-    // keep the result in memory so the smaller sizes don't decode again.
-    let mut image = ops::thumbnail_with_opts(
-        &utf8(source)?,
-        largest.long_edge as i32,
-        &ThumbnailOptions {
-            height: largest.long_edge as i32,
-            size: Size::Down,
-            output_profile: Some("srgb".into()),
-            ..ThumbnailOptions::default()
-        },
-    )
-    .map_err(|e| vips_error("decoding", e))?;
+    let mut image =
+        ops::thumbnail(&utf8(source)?, target(largest)).map_err(|e| vips_error("decoding", e))?;
     image = VipsImage::image_copy_memory(image).map_err(|e| vips_error("buffering", e))?;
     save(&image, cache, key, largest)?;
 
     for variant in &VARIANTS[1..] {
-        let resized = ops::thumbnail_image_with_opts(
-            &image,
-            variant.long_edge as i32,
-            &ThumbnailImageOptions {
-                height: variant.long_edge as i32,
-                size: Size::Down,
-                no_rotate: true,
-                ..ThumbnailImageOptions::default()
-            },
-        )
-        .map_err(|e| vips_error("resizing", e))?;
+        let resized = ops::thumbnail_image(&image, target(*variant))
+            .map_err(|e| vips_error("resizing", e))?;
         image = VipsImage::image_copy_memory(resized).map_err(|e| vips_error("buffering", e))?;
         save(&image, cache, key, *variant)?;
     }
@@ -186,18 +178,18 @@ fn save(image: &VipsImage, cache: &Path, key: &str, variant: Variant) -> Result<
     // Write next to the target and rename, so a crash never leaves a
     // truncated file under the final (immutable, long-cached) name.
     let tmp = dir.join(format!(".{}.tmp.webp", file_name(key, variant)));
-    ops::webpsave_with_opts(
-        image,
-        &utf8(&tmp)?,
-        &WebpsaveOptions {
-            q: variant.quality,
-            smart_subsample: variant.quality >= 80,
-            effort: 4,
-            keep: ForeignKeep::None,
-            ..WebpsaveOptions::default()
-        },
-    )
-    .map_err(|e| vips_error("encoding WebP", e))?;
+    let smart_subsample = if variant.quality >= 80 {
+        ",smart_subsample=true"
+    } else {
+        ""
+    };
+    let options = format!(
+        "[Q={},effort=4,keep=none{smart_subsample}]",
+        variant.quality
+    );
+    image
+        .image_write_to_file(&format!("{}{options}", utf8(&tmp)?))
+        .map_err(|e| vips_error("encoding WebP", e))?;
     std::fs::rename(&tmp, &target)?;
     Ok(())
 }
@@ -215,17 +207,8 @@ fn display_dims(source: &Path) -> Result<(u32, u32)> {
 }
 
 fn placeholder(image: &VipsImage) -> Result<(Vec<u8>, u32)> {
-    let tiny = ops::thumbnail_image_with_opts(
-        image,
-        100,
-        &ThumbnailImageOptions {
-            height: 100,
-            size: Size::Down,
-            no_rotate: true,
-            ..ThumbnailImageOptions::default()
-        },
-    )
-    .map_err(|e| vips_error("placeholder", e))?;
+    // ThumbHash wants at most 100×100.
+    let tiny = ops::thumbnail_image(image, 100).map_err(|e| vips_error("placeholder", e))?;
     let (w, h) = (tiny.get_width() as usize, tiny.get_height() as usize);
     let bands = tiny.get_bands() as usize;
     let pixels = tiny.image_write_to_memory();
@@ -255,8 +238,21 @@ fn utf8(path: &Path) -> Result<String> {
         .with_context(|| format!("non UTF-8 path: {}", path.display()))
 }
 
+/// The bindings' errors only say which operation failed; libvips' own
+/// message (e.g. "unknown option") is in its error buffer.
 fn vips_error(what: &str, err: libvips::error::Error) -> anyhow::Error {
-    anyhow!("libvips {what}: {err}")
+    let app = VipsApp;
+    let detail = app
+        .error_buffer()
+        .unwrap_or_default()
+        .trim()
+        .replace('\n', "; ");
+    app.error_clear();
+    if detail.is_empty() {
+        anyhow!("libvips {what}: {err}")
+    } else {
+        anyhow!("libvips {what}: {detail}")
+    }
 }
 
 #[cfg(test)]

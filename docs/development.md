@@ -69,6 +69,35 @@ prints ok/FAIL per check and saves screenshots to `target/ui-check/`. It never
 starts a scan. Headless Chrome cannot go narrower than 500 px: use
 `--window-size=500,…` for "mobile" screenshots.
 
+## Testing the Docker image locally
+
+```sh
+# compose override pointing at a test config (e.g. [scan] workers = 2)
+cat > /tmp/pellicule-override.yaml <<YAML
+services:
+  pellicule:
+    volumes:
+      - /tmp/pellicule-test.toml:/config/pellicule.toml:ro
+YAML
+export PHOTOS_DIR=./samples-proto CACHE_DIR=/tmp/pellicule-cache \
+       PRIVATE_PORT=18080 PUBLIC_PORT=18081 PUID=$(id -u) PGID=$(id -g)
+docker compose -f compose.yaml -f /tmp/pellicule-override.yaml up -d --build
+curl -s localhost:18080/library/status          # wait for "running":false
+BASE=http://localhost:18080 node scripts/check-ui.mjs
+docker compose -f compose.yaml -f /tmp/pellicule-override.yaml down
+```
+
+## libvips versions
+
+The Mac has libvips 8.18 (Homebrew), the Docker image 8.16 (Debian trixie).
+The `libvips` crate is generated for 8.17+, and its `*_with_opts` functions
+send **every** optional argument by name, including ones renamed after 8.16
+(`input-profile` was `import-profile`), so on 8.16 the whole call fails.
+Rule: only call binding functions **without** options (`ops::thumbnail`,
+`ops::thumbnail_image`), and pass save options in libvips' filename syntax
+(`image_write_to_file("x.webp[Q=80,effort=4,keep=none]")`). Always test
+image changes in Docker too.
+
 ## Conventions
 
 - Commit messages: imperative subject, short bullet body; no co-author lines.

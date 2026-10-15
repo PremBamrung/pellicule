@@ -16,7 +16,7 @@ X-T3/X-E3 JPEGs) and is ready to be tried on the NAS with Docker Compose.
 | Filters | ✅ day, camera, lens, focal range (in the browser, URL state) |
 | Library page | ✅ rescan / rebuild / cancel, live progress, history, failures |
 | Look | ✅ white by default + dark toggle, Geist, blur-up placeholders, transitions |
-| Docker | ✅ image + compose; ⏳ not yet run on the NAS |
+| Docker | ✅ image + compose, verified end to end on the Mac; ⏳ not yet run on the NAS |
 | Fujifilm recipe | ⏳ next |
 | Share links (Funnel) | ⏳ |
 | `index.md` / essays | ⏳ |
