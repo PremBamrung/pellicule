@@ -89,6 +89,28 @@ a cache, and **serve** that cache over two HTTP listeners.
 
 Frontend (vendored, MIT): PhotoSwipe 5, ThumbHash decoder.
 
+## Why Rust
+
+The heavy work, decoding and resizing 26 MP JPEGs, happens in libvips (C)
+whatever language calls it, so Rust is not chosen for raw image speed. It is
+chosen for what surrounds it:
+
+- **Memory safety on untrusted input.** Pellicule parses file formats it did
+  not write (EXIF, Fujifilm MakerNotes, later video containers) and exposes
+  share links to the internet through Funnel. In C/C++ a parsing bug there can
+  become a remote exploit; in Rust it is a compile error or a clean error.
+- **Small and predictable on the N100.** One static-ish binary, no runtime or
+  garbage collector, tens of MB of RAM plus image buffers; Node-based
+  galleries have hit multi-GB memory blowups (PiGallery2 #1070).
+- **Fearless concurrency.** Parallel scan workers, a progress tracker and a web
+  server share state; data races are ruled out by the compiler.
+- **One artifact to deploy**, a mature ecosystem for the job (axum, rusqlite,
+  libvips bindings, nom-exif), and it is fun to write.
+
+Go would have been the pragmatic alternative (faster to write, slightly
+heavier at runtime); C/C++ the same speed with real risk on the public side;
+Node/Python what this project moves away from.
+
 ## Relationship to the culling tool
 
 Pellicule and the sorting/culling tool are separate projects sharing conventions:

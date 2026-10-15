@@ -56,6 +56,7 @@ NAS library (read-only)            Pellicule                         Viewers
 - [Access & sharing](docs/sharing.md) — tailnet vs Funnel, share links
 - [Inspirations](docs/inspirations.md) — what we learned from other galleries
 - [Deployment](docs/deployment.md) — Docker Compose on the NAS, Tailscale Funnel
+- [Development](docs/development.md) — local setup, prototype library, checks
 - [Roadmap](docs/roadmap.md) — milestones
 
 ## Quick start
