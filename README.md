@@ -49,6 +49,7 @@ NAS library (read-only)            Pellicule                         Viewers
 ## Documentation
 
 - [Architecture](docs/architecture.md) — components, data flow, crates
+- [Decisions](docs/decisions.md) — the main choices and why, in one table
 - [Library conventions](docs/conventions.md) — folders, `index.md`, ignored files
 - [Cache & derivatives](docs/cache.md) — sizes, formats, cache layout, invalidation
 - [EXIF & Fujifilm metadata](docs/exif.md) — what we read and how we display it
