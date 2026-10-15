@@ -15,7 +15,13 @@ use crate::config::Config;
 #[command(version, about)]
 struct Cli {
     /// Path to the configuration file.
-    #[arg(short, long, global = true, default_value = "pellicule.toml")]
+    #[arg(
+        short,
+        long,
+        global = true,
+        env = "PELLICULE_CONFIG",
+        default_value = "pellicule.toml"
+    )]
     config: PathBuf,
 
     #[command(subcommand)]
@@ -28,6 +34,8 @@ enum Command {
     Scan,
     /// Start the private (tailnet) and public (share links) listeners.
     Serve,
+    /// Exit 0 if the running server answers on its private listener.
+    Healthcheck,
 }
 
 #[tokio::main]
@@ -57,6 +65,7 @@ async fn main() -> Result<()> {
             );
         }
         Command::Serve => server::run(config).await?,
+        Command::Healthcheck => server::healthcheck(&config).await?,
     }
 
     Ok(())

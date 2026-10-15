@@ -52,17 +52,25 @@ NAS library (read-only)            Pellicule                         Viewers
 - [Frontend](docs/frontend.md) — design principles, grid, viewer, essay layout
 - [Access & sharing](docs/sharing.md) — tailnet vs Funnel, share links
 - [Inspirations](docs/inspirations.md) — what we learned from other galleries
+- [Deployment](docs/deployment.md) — Docker Compose on the NAS, Tailscale Funnel
 - [Roadmap](docs/roadmap.md) — milestones
 
-## Quick start (planned)
+## Quick start
+
+On the NAS (Docker Compose, Tailscale on the host):
 
 ```sh
-pellicule scan  --config pellicule.toml   # index library, generate derivatives
-pellicule serve --config pellicule.toml   # start private + public listeners
+cp .env.example .env              # PHOTOS_DIR, CACHE_DIR, PUID/PGID
+docker compose up -d --build
+docker compose run --rm pellicule scan
+sudo tailscale funnel --bg 8081   # public share links
 ```
 
+Private gallery on `http://<nas>:8080` (LAN / tailnet). See [deployment](docs/deployment.md).
+
+Configuration (`docker/pellicule.toml` in the container, `pellicule.toml` locally):
+
 ```toml
-# pellicule.toml
 [library]
 root  = "/photos"               # mounted read-only
 cache = "/var/lib/pellicule"    # previews, videos, sqlite
@@ -78,7 +86,9 @@ Requires Rust (stable), libvips and ffmpeg.
 
 ```sh
 brew install rustup vips ffmpeg   # macOS
-cargo run -- serve --config pellicule.example.toml
+cp pellicule.example.toml pellicule.toml   # point root at ./samples
+cargo run -- scan
+cargo run -- serve
 ```
 
 ## License

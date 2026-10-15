@@ -1,0 +1,7 @@
+.git
+target
+samples
+cache
+.env
+pellicule.toml
+**/.DS_Store

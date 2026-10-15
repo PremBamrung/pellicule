@@ -1,0 +1,23 @@
+services:
+  pellicule:
+    build: .
+    image: pellicule:local
+    container_name: pellicule
+    restart: unless-stopped
+    user: "${PUID:-1000}:${PGID:-1000}"
+    environment:
+      RUST_LOG: ${RUST_LOG:-pellicule=info}
+    volumes:
+      - ${PHOTOS_DIR:?set PHOTOS_DIR in .env}:/photos:ro
+      - ${CACHE_DIR:-./cache}:/cache
+      # Uncomment to override the bundled config:
+      # - ./pellicule.toml:/config/pellicule.toml:ro
+    ports:
+      # Full gallery: LAN and tailnet.
+      - "${PRIVATE_PORT:-8080}:8080"
+      # Share links only. Bound to the host's loopback so the only way in from
+      # outside is `tailscale funnel` running on the host.
+      - "127.0.0.1:${PUBLIC_PORT:-8081}:8081"
+    # Later (M5): Intel Quick Sync on the N100 for video transcoding.
+    # devices:
+    #   - /dev/dri:/dev/dri
