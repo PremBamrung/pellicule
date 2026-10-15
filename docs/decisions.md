@@ -9,7 +9,7 @@ live in the linked docs; this page is the short version.
 | Language | Rust | Memory safety for untrusted file parsing and public share links, small and predictable RAM on a NAS, one binary. See [architecture](architecture.md#why-rust). |
 | Image processing | libvips, four WebP variants (480 / 960 / 2048 / 4096) | Shrink-on-load is the biggest speed win on 26 MP JPEGs; WebP encodes ~10× faster than AVIF on a NAS CPU. See [cache](cache.md). |
 | When to generate | Everything at scan time, cache on SSD | The library lives on HDDs that spin down: browsing, viewing and zooming must never wake them. |
-| Cache identity | Partial BLAKE3 content key (size + first/last 64 KiB) | Renamed or moved files reuse their previews; URLs never go stale. |
+| Cache identity | BLAKE3 of the whole file | Renamed or moved files reuse their previews; URLs never go stale. A partial hash (first/last 64 KiB) was dropped: two files with the same ends would share previews. |
 | Index | SQLite in the cache directory | One file, no server, disposable (a rescan rebuilds it). |
 | Scans | One at a time, half the CPU cores by default, low priority; history recorded | The NAS stays responsive; progress and failures are visible on the Library page. |
 | EXIF | `nom-exif` + own Fujifilm MakerNote parser | No gallery reads Fuji film simulations; the library is almost all Fujifilm. See [exif](exif.md). |

@@ -3,7 +3,6 @@
 //! See docs/cache.md.
 
 use std::fs::File;
-use std::io::{Read, Seek, SeekFrom};
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result, anyhow, bail};
@@ -68,39 +67,14 @@ pub fn fit(width: u32, height: u32, variant: Variant) -> (u32, u32) {
     (w, h)
 }
 
-/// Cheap content identity: BLAKE3 over the size and the first and last
-/// 64 KiB. Renamed or moved files keep their key, hence their derivatives.
-pub fn content_key(path: &Path, size: u64) -> Result<String> {
-    const CHUNK: u64 = 64 * 1024;
-    let mut file = File::open(path)?;
+/// Content identity: BLAKE3 of the whole file. Renamed or moved files keep
+/// their key, hence their derivatives. Only new or changed files are hashed,
+/// and those are read in full for decoding anyway.
+pub fn content_key(path: &Path) -> Result<String> {
     let mut hasher = blake3::Hasher::new();
-    hasher.update(&size.to_le_bytes());
-
-    let mut buf = vec![0; CHUNK as usize];
-    let n = read_up_to(&mut file, &mut buf)?;
-    hasher.update(&buf[..n]);
-    if size > CHUNK * 2 {
-        file.seek(SeekFrom::End(-(CHUNK as i64)))?;
-        let n = read_up_to(&mut file, &mut buf)?;
-        hasher.update(&buf[..n]);
-    } else if size > CHUNK {
-        file.seek(SeekFrom::Start(CHUNK))?;
-        let n = read_up_to(&mut file, &mut buf)?;
-        hasher.update(&buf[..n]);
-    }
+    hasher.update_reader(File::open(path)?)?;
     // 128 bits is plenty for a personal library and keeps URLs short.
     Ok(hasher.finalize().to_hex()[..32].to_string())
-}
-
-fn read_up_to(file: &mut File, buf: &mut [u8]) -> std::io::Result<usize> {
-    let mut total = 0;
-    while total < buf.len() {
-        match file.read(&mut buf[total..])? {
-            0 => break,
-            n => total += n,
-        }
-    }
-    Ok(total)
 }
 
 /// `<cache>/d/ab/cd/<key>-<variant>.v<N>.webp`
@@ -268,21 +242,22 @@ mod tests {
     }
 
     #[test]
-    fn content_key_depends_on_head_and_tail() {
-        let dir = std::env::temp_dir().join(format!("pellicule-test-{}", std::process::id()));
+    fn content_key_covers_the_whole_file() {
+        let dir = std::env::temp_dir().join(format!("pellicule-test-{}-key", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         let a = dir.join("a.bin");
         let mut data = vec![7u8; 300 * 1024];
         std::fs::write(&a, &data).unwrap();
-        let key_a = content_key(&a, data.len() as u64).unwrap();
+        let key_a = content_key(&a).unwrap();
 
         let b = dir.join("renamed.bin");
         std::fs::rename(&a, &b).unwrap();
-        assert_eq!(content_key(&b, data.len() as u64).unwrap(), key_a);
+        assert_eq!(content_key(&b).unwrap(), key_a);
 
-        *data.last_mut().unwrap() = 8;
+        // Same size, same head and tail: only the middle differs.
+        data[150 * 1024] = 8;
         std::fs::write(&b, &data).unwrap();
-        assert_ne!(content_key(&b, data.len() as u64).unwrap(), key_a);
+        assert_ne!(content_key(&b).unwrap(), key_a);
         std::fs::remove_dir_all(&dir).unwrap();
     }
 }

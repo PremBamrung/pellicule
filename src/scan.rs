@@ -515,7 +515,7 @@ fn lower_priority() {
 }
 
 fn process_one(job: &Job, cache: &Path, rebuild: bool) -> Result<Processed> {
-    let key = derive::content_key(&job.path, job.size)?;
+    let key = derive::content_key(&job.path)?;
     let exif = meta::read_exif(&job.path);
     let derived = derive::generate(&job.path, cache, &key, rebuild)?;
     Ok(Processed { key, exif, derived })
