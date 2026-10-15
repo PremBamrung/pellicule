@@ -11,6 +11,29 @@
   {% endif %}
   <h1 class="album-title">{{ title }}</h1>
   <p class="album-summary">{{ summary }}</p>
+  {% if !filters.is_empty() %}
+  <div class="filters" hidden>
+    {% for group in filters %}
+    <details class="filter" data-filter="{{ group.key }}">
+      <summary data-label="{{ group.label }}">{{ group.label }}</summary>
+      <fieldset>
+        <legend class="visually-hidden">{{ group.label }}</legend>
+        {% for option in group.options %}
+        <label>
+          <input type="checkbox" name="{{ group.key }}" value="{{ option.value }}">
+          <span>{{ option.label }}</span>
+          <span class="count">{{ option.count }}</span>
+        </label>
+        {% endfor %}
+      </fieldset>
+    </details>
+    {% endfor %}
+    <p class="filter-status" hidden>
+      <span class="filter-count"></span>
+      <button type="button" class="filter-clear">Clear filters</button>
+    </p>
+  </div>
+  {% endif %}
 </header>
 
 {% if !albums.is_empty() %}

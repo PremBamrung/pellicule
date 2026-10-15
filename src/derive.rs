@@ -7,8 +7,10 @@ use std::io::{Read, Seek, SeekFrom};
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result, anyhow, bail};
-use libvips::ops::{self, ForeignKeep, Size, ThumbnailImageOptions, ThumbnailOptions, WebpsaveOptions};
 use libvips::VipsImage;
+use libvips::ops::{
+    self, ForeignKeep, Size, ThumbnailImageOptions, ThumbnailOptions, WebpsaveOptions,
+};
 
 /// Bump when sizes, quality or processing change: everything is regenerated.
 pub const PIPELINE_VERSION: i64 = 1;
@@ -22,10 +24,26 @@ pub struct Variant {
 
 /// Largest first: each variant is made from the previous one.
 pub const VARIANTS: [Variant; 4] = [
-    Variant { name: "x", long_edge: 4096, quality: 82 },
-    Variant { name: "l", long_edge: 2048, quality: 80 },
-    Variant { name: "m", long_edge: 960, quality: 78 },
-    Variant { name: "t", long_edge: 480, quality: 75 },
+    Variant {
+        name: "x",
+        long_edge: 4096,
+        quality: 82,
+    },
+    Variant {
+        name: "l",
+        long_edge: 2048,
+        quality: 80,
+    },
+    Variant {
+        name: "m",
+        long_edge: 960,
+        quality: 78,
+    },
+    Variant {
+        name: "t",
+        long_edge: 480,
+        quality: 75,
+    },
 ];
 
 pub fn variant(name: &str) -> Option<Variant> {
@@ -116,7 +134,12 @@ pub fn generate(source: &Path, cache: &Path, key: &str) -> Result<Derived> {
     };
 
     let (thumbhash, avg_rgb) = placeholder(&smallest_image)?;
-    Ok(Derived { width, height, thumbhash, avg_rgb })
+    Ok(Derived {
+        width,
+        height,
+        thumbhash,
+        avg_rgb,
+    })
 }
 
 fn write_variants(source: &Path, cache: &Path, key: &str) -> Result<VipsImage> {
@@ -183,7 +206,11 @@ fn display_dims(source: &Path) -> Result<(u32, u32)> {
         VipsImage::new_from_file(&utf8(source)?).map_err(|e| vips_error("reading header", e))?;
     let (w, h) = (header.get_width() as u32, header.get_height() as u32);
     // EXIF orientations 5–8 rotate by 90°.
-    Ok(if header.get_orientation() >= 5 { (h, w) } else { (w, h) })
+    Ok(if header.get_orientation() >= 5 {
+        (h, w)
+    } else {
+        (w, h)
+    })
 }
 
 fn placeholder(image: &VipsImage) -> Result<(Vec<u8>, u32)> {
@@ -215,8 +242,8 @@ fn placeholder(image: &VipsImage) -> Result<(Vec<u8>, u32)> {
         })
         .collect();
     let hash = thumbhash::rgba_to_thumb_hash(w, h, &rgba);
-    let (r, g, b, _) = thumbhash::thumb_hash_to_average_rgba(&hash)
-        .map_err(|()| anyhow!("thumbhash average"))?;
+    let (r, g, b, _) =
+        thumbhash::thumb_hash_to_average_rgba(&hash).map_err(|()| anyhow!("thumbhash average"))?;
     let channel = |c: f32| (c.clamp(0.0, 1.0) * 255.0).round() as u32;
     Ok((hash, channel(r) << 16 | channel(g) << 8 | channel(b)))
 }

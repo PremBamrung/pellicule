@@ -34,6 +34,21 @@ pub struct AlbumPage<'a> {
     pub summary: String,
     pub albums: Vec<AlbumCard>,
     pub tiles: Vec<Tile>,
+    pub filters: Vec<FilterGroup>,
+}
+
+/// One filter menu (day, camera, lens, focal) with the values present in
+/// the album. Filtering itself happens in the browser (static/app.js).
+pub struct FilterGroup {
+    pub key: &'static str,
+    pub label: &'static str,
+    pub options: Vec<FilterOption>,
+}
+
+pub struct FilterOption {
+    pub value: String,
+    pub label: String,
+    pub count: usize,
 }
 
 pub struct Crumb {
@@ -65,6 +80,11 @@ pub struct Tile {
     pub label_date: String,
     pub label_gear: String,
     pub label_exposure: String,
+    /// Filter values; empty when unknown.
+    pub day: String,
+    pub camera: String,
+    pub lens: String,
+    pub focal: &'static str,
 }
 
 struct AlbumRow {
@@ -79,11 +99,19 @@ pub fn home<'a>(conn: &Connection, layout: &'a Layout) -> Result<HomePage<'a>> {
         Some(root) => (child_cards(conn, root.id)?, tiles(conn, root.id)?),
         None => (Vec::new(), Vec::new()),
     };
-    Ok(HomePage { layout, albums, tiles })
+    Ok(HomePage {
+        layout,
+        albums,
+        tiles,
+    })
 }
 
 /// `None` when the album doesn't exist (or is missing / empty).
-pub fn album<'a>(conn: &Connection, layout: &'a Layout, rel_path: &str) -> Result<Option<AlbumPage<'a>>> {
+pub fn album<'a>(
+    conn: &Connection,
+    layout: &'a Layout,
+    rel_path: &str,
+) -> Result<Option<AlbumPage<'a>>> {
     let rel_path = rel_path.trim_matches('/');
     if rel_path.is_empty() {
         return Ok(None);
@@ -100,20 +128,25 @@ pub fn album<'a>(conn: &Connection, layout: &'a Layout, rel_path: &str) -> Resul
             prefix.push('/');
         }
         prefix.push_str(part);
-        crumbs.push(Crumb { href: album_href(&prefix), name: (*part).to_string() });
+        crumbs.push(Crumb {
+            href: album_href(&prefix),
+            name: (*part).to_string(),
+        });
     }
 
     let (count, first, last) = album_stats(conn, &album.rel_path)?;
     if count == 0 {
         return Ok(None);
     }
+    let tiles = tiles(conn, album.id)?;
     Ok(Some(AlbumPage {
         layout,
         title: album.name,
         crumbs,
         summary: summary(count, first.as_deref(), last.as_deref()),
         albums: child_cards(conn, album.id)?,
-        tiles: tiles(conn, album.id)?,
+        filters: filters(&tiles),
+        tiles,
     }))
 }
 
@@ -122,7 +155,13 @@ fn album_by_path(conn: &Connection, rel_path: &str) -> Result<Option<AlbumRow>> 
         .query_row(
             "SELECT id, rel_path, name FROM album WHERE rel_path = ?1 AND missing_since IS NULL",
             params![rel_path],
-            |r| Ok(AlbumRow { id: r.get(0)?, rel_path: r.get(1)?, name: r.get(2)? }),
+            |r| {
+                Ok(AlbumRow {
+                    id: r.get(0)?,
+                    rel_path: r.get(1)?,
+                    name: r.get(2)?,
+                })
+            },
         )
         .optional()?)
 }
@@ -151,7 +190,11 @@ fn child_cards(conn: &Connection, parent_id: i64) -> Result<Vec<AlbumCard>> {
     )?;
     let children: Vec<AlbumRow> = stmt
         .query_map(params![parent_id], |r| {
-            Ok(AlbumRow { id: r.get(0)?, rel_path: r.get(1)?, name: r.get(2)? })
+            Ok(AlbumRow {
+                id: r.get(0)?,
+                rel_path: r.get(1)?,
+                name: r.get(2)?,
+            })
         })?
         .collect::<rusqlite::Result<_>>()?;
 
@@ -262,31 +305,134 @@ fn tile_from_row(row: &Row) -> rusqlite::Result<Tile> {
         zoom_srcset: srcset(&[t, m, l, x]),
         zoom_width,
         zoom_height,
-        label_date: taken_at.as_deref().map(format_date_time).unwrap_or_default(),
+        label_date: taken_at
+            .as_deref()
+            .map(format_date_time)
+            .unwrap_or_default(),
         label_gear: gear(make.as_deref(), model.as_deref(), lens.as_deref()),
         label_exposure: exposure.join(", "),
+        day: taken_at
+            .as_deref()
+            .and_then(parse)
+            .map(|dt| dt.format("%Y-%m-%d").to_string())
+            .unwrap_or_default(),
+        camera: body(make.as_deref(), model.as_deref()),
+        lens: lens.unwrap_or_default(),
+        focal: focal_mm
+            .map(|mm| focal_range(focal_35mm.map_or(mm, |eq| eq as f64)).0)
+            .unwrap_or(""),
     })
 }
 
-/// "Fujifilm X-T3, XF56mmF1.2 R". Makers write their name in capitals and
-/// sometimes repeat it in the model ("Canon EOS R6").
-fn gear(make: Option<&str>, model: Option<&str>, lens: Option<&str>) -> String {
-    let make = make.map(|m| match m.to_ascii_uppercase().as_str() {
-        "FUJIFILM" => "Fujifilm".to_string(),
-        "CANON" => "Canon".to_string(),
-        "NIKON CORPORATION" => "Nikon".to_string(),
-        "SONY" => "Sony".to_string(),
-        _ => m.to_string(),
-    });
-    let body = match (make, model) {
-        (Some(make), Some(model)) if model.to_lowercase().starts_with(&make.to_lowercase()) => {
-            model.to_string()
+/// Focal ranges in 35mm-equivalent: (value, label). Zooms record values
+/// like 30.8mm, so ranges read better than exact lengths.
+const FOCAL_RANGES: [(&str, &str, f64); 4] = [
+    ("wide", "Wide, under 35mm", 35.0),
+    ("normal", "Normal, 35–70mm", 70.0),
+    ("short-tele", "Short tele, 70–135mm", 135.0),
+    ("tele", "Tele, 135mm and over", f64::INFINITY),
+];
+
+fn focal_range(equivalent_mm: f64) -> (&'static str, &'static str) {
+    FOCAL_RANGES
+        .iter()
+        .find(|(_, _, below)| equivalent_mm < *below)
+        .map(|(value, label, _)| (*value, *label))
+        .expect("last range is unbounded")
+}
+
+/// Menus only appear when they offer a real choice (two values or more).
+fn filters(tiles: &[Tile]) -> Vec<FilterGroup> {
+    fn counted<'a>(values: impl Iterator<Item = &'a str>) -> Vec<(String, usize)> {
+        let mut counts = std::collections::BTreeMap::<&str, usize>::new();
+        for value in values.filter(|v| !v.is_empty()) {
+            *counts.entry(value).or_default() += 1;
         }
-        (Some(make), Some(model)) => format!("{make} {model}"),
-        (None, Some(model)) => model.to_string(),
-        (Some(make), None) => make,
-        (None, None) => String::new(),
+        counts
+            .into_iter()
+            .map(|(v, n)| (v.to_string(), n))
+            .collect()
+    }
+
+    let days = counted(tiles.iter().map(|t| t.day.as_str()));
+    let several_years = days
+        .first()
+        .zip(days.last())
+        .is_some_and(|(a, b)| a.0[..4] != b.0[..4]);
+    let day_label = |value: &str| {
+        chrono::NaiveDate::parse_from_str(value, "%Y-%m-%d")
+            .map(|d| {
+                d.format(if several_years {
+                    "%a %-d %b %Y"
+                } else {
+                    "%a %-d %b"
+                })
+                .to_string()
+            })
+            .unwrap_or_else(|_| value.to_string())
     };
+
+    let focal_counts = counted(tiles.iter().map(|t| t.focal));
+    let focal = FOCAL_RANGES
+        .iter()
+        .filter_map(|(value, label, _)| {
+            let count = focal_counts.iter().find(|(v, _)| v == value)?.1;
+            Some(FilterOption {
+                value: value.to_string(),
+                label: label.to_string(),
+                count,
+            })
+        })
+        .collect();
+
+    let plain = |values: Vec<(String, usize)>| {
+        values
+            .into_iter()
+            .map(|(value, count)| FilterOption {
+                label: value.clone(),
+                value,
+                count,
+            })
+            .collect()
+    };
+
+    [
+        FilterGroup {
+            key: "day",
+            label: "Day",
+            options: days
+                .into_iter()
+                .map(|(value, count)| FilterOption {
+                    label: day_label(&value),
+                    value,
+                    count,
+                })
+                .collect(),
+        },
+        FilterGroup {
+            key: "camera",
+            label: "Camera",
+            options: plain(counted(tiles.iter().map(|t| t.camera.as_str()))),
+        },
+        FilterGroup {
+            key: "lens",
+            label: "Lens",
+            options: plain(counted(tiles.iter().map(|t| t.lens.as_str()))),
+        },
+        FilterGroup {
+            key: "focal",
+            label: "Focal length",
+            options: focal,
+        },
+    ]
+    .into_iter()
+    .filter(|group| group.options.len() >= 2)
+    .collect()
+}
+
+/// "Fujifilm X-T3, XF56mmF1.2 R".
+fn gear(make: Option<&str>, model: Option<&str>, lens: Option<&str>) -> String {
+    let body = body(make, model);
     match lens {
         Some(lens) if !body.is_empty() => format!("{body}, {lens}"),
         Some(lens) => lens.to_string(),
@@ -294,9 +440,34 @@ fn gear(make: Option<&str>, model: Option<&str>, lens: Option<&str>) -> String {
     }
 }
 
+/// "Fujifilm X-T3". Makers write their name in capitals and sometimes
+/// repeat it in the model ("Canon EOS R6").
+fn body(make: Option<&str>, model: Option<&str>) -> String {
+    let make = make.map(|m| match m.to_ascii_uppercase().as_str() {
+        "FUJIFILM" => "Fujifilm".to_string(),
+        "CANON" => "Canon".to_string(),
+        "NIKON CORPORATION" => "Nikon".to_string(),
+        "SONY" => "Sony".to_string(),
+        _ => m.to_string(),
+    });
+    match (make, model) {
+        (Some(make), Some(model)) if model.to_lowercase().starts_with(&make.to_lowercase()) => {
+            model.to_string()
+        }
+        (Some(make), Some(model)) => format!("{make} {model}"),
+        (None, Some(model)) => model.to_string(),
+        (Some(make), None) => make,
+        (None, None) => String::new(),
+    }
+}
+
 /// "760 photographs, March – April 2024"
 fn summary(count: i64, first: Option<&str>, last: Option<&str>) -> String {
-    let noun = if count == 1 { "photograph" } else { "photographs" };
+    let noun = if count == 1 {
+        "photograph"
+    } else {
+        "photographs"
+    };
     match date_span(first, last) {
         Some(span) => format!("{count} {noun}, {span}"),
         None => format!("{count} {noun}"),
@@ -312,13 +483,15 @@ fn date_span(first: Option<&str>, last: Option<&str>) -> Option<String> {
     let last = last.and_then(parse).unwrap_or(first);
     let (fy, ly) = (first.format("%Y"), last.format("%Y"));
     let (fm, lm) = (first.format("%B"), last.format("%B"));
-    Some(if first.format("%Y-%m").to_string() == last.format("%Y-%m").to_string() {
-        format!("{fm} {fy}")
-    } else if fy.to_string() == ly.to_string() {
-        format!("{fm} – {lm} {ly}")
-    } else {
-        format!("{fm} {fy} – {lm} {ly}")
-    })
+    Some(
+        if first.format("%Y-%m").to_string() == last.format("%Y-%m").to_string() {
+            format!("{fm} {fy}")
+        } else if fy.to_string() == ly.to_string() {
+            format!("{fm} – {lm} {ly}")
+        } else {
+            format!("{fm} {fy} – {lm} {ly}")
+        },
+    )
 }
 
 /// "12 March 2024, 14:32"
@@ -359,17 +532,52 @@ mod tests {
 
     #[test]
     fn gear_reads_like_a_label() {
-        assert_eq!(gear(Some("FUJIFILM"), Some("X-T3"), Some("XF56mmF1.2 R")), "Fujifilm X-T3, XF56mmF1.2 R");
-        assert_eq!(gear(Some("Canon"), Some("Canon EOS R6"), None), "Canon EOS R6");
+        assert_eq!(
+            gear(Some("FUJIFILM"), Some("X-T3"), Some("XF56mmF1.2 R")),
+            "Fujifilm X-T3, XF56mmF1.2 R"
+        );
+        assert_eq!(
+            gear(Some("Canon"), Some("Canon EOS R6"), None),
+            "Canon EOS R6"
+        );
         assert_eq!(gear(None, None, None), "");
+    }
+
+    #[test]
+    fn focal_ranges_use_35mm_equivalent() {
+        assert_eq!(focal_range(24.0).0, "wide");
+        assert_eq!(focal_range(35.0).0, "normal");
+        assert_eq!(focal_range(84.0).0, "short-tele");
+        assert_eq!(focal_range(135.0).0, "tele");
     }
 
     #[test]
     fn date_spans() {
         let d = |s: &str| Some(s.to_string());
-        assert_eq!(date_span(d("2024-03-02T10:00:00").as_deref(), d("2024-03-20T10:00:00").as_deref()).unwrap(), "March 2024");
-        assert_eq!(date_span(d("2024-03-02T10:00:00").as_deref(), d("2024-04-01T10:00:00").as_deref()).unwrap(), "March – April 2024");
-        assert_eq!(date_span(d("2023-12-30T10:00:00").as_deref(), d("2024-01-02T10:00:00").as_deref()).unwrap(), "December 2023 – January 2024");
+        assert_eq!(
+            date_span(
+                d("2024-03-02T10:00:00").as_deref(),
+                d("2024-03-20T10:00:00").as_deref()
+            )
+            .unwrap(),
+            "March 2024"
+        );
+        assert_eq!(
+            date_span(
+                d("2024-03-02T10:00:00").as_deref(),
+                d("2024-04-01T10:00:00").as_deref()
+            )
+            .unwrap(),
+            "March – April 2024"
+        );
+        assert_eq!(
+            date_span(
+                d("2023-12-30T10:00:00").as_deref(),
+                d("2024-01-02T10:00:00").as_deref()
+            )
+            .unwrap(),
+            "December 2023 – January 2024"
+        );
         assert_eq!(summary(1, None, None), "1 photograph");
     }
 }

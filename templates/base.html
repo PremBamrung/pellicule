@@ -1,9 +1,12 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-theme="light">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="color-scheme" content="dark light">
+  <script>
+    // Apply the remembered theme before the first paint (white by default).
+    try { if (localStorage.getItem("theme") === "dark") document.documentElement.dataset.theme = "dark"; } catch {}
+  </script>
   <title>{% block title %}Pellicule{% endblock %}</title>
   <link rel="preload" href="/static/fonts/eb-garamond-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="{{ layout.css_url }}">
@@ -12,6 +15,7 @@
 <body>
   <header class="masthead">
     <a class="wordmark" href="/">Pellicule</a>
+    <button class="theme-toggle" type="button" hidden>Dark</button>
   </header>
   <main>{% block content %}{% endblock %}</main>
 </body>

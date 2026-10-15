@@ -36,6 +36,24 @@ No JS virtualization below ~2k items: native `loading="lazy"` plus
 `content-visibility: auto` on row blocks. The first image gets
 `fetchpriority="high"`.
 
+## Filters
+
+Album pages offer up to four menus under the title: **Day**, **Camera**,
+**Lens** and **Focal length**. A menu only appears when the album has at least
+two values for it.
+
+- Days read like "Sat 7 Oct" (with the year when the album spans several).
+- Focal length uses 35mm-equivalent ranges, since zooms record values like
+  30.8mm: wide (under 35), normal (35–70), short tele (70–135), tele (135+).
+- Several values can be picked per menu (OR); menus combine (AND).
+- Filtering happens in the browser and is instant: tiles are hidden, the grid
+  re-flows, and the viewer only steps through matching photos.
+- Counts reflect the other active filters, and options that would empty the
+  grid are disabled, so a choice never leads to a dead end.
+- State lives in the URL (`?lens=XF35mmF1.4+R&day=2023-10-07`): bookmarkable,
+  shareable, restored on reload. "Clear filters" resets it.
+- The server only adds `data-f-*` attributes to each tile; no extra queries.
+
 ## Viewer
 
 PhotoSwipe opens instantly from the already-loaded grid thumbnail (`msrc`), then
@@ -56,9 +74,10 @@ lazily when the viewer opens.
 
 ## Design principles
 
-1. **The image is the interface.** Neutral background (near-black `#111` /
-   off-white `#f5f4f0` themes, never pure black/white), generous margins, no
-   borders, no drop shadows, minimal chrome that fades away.
+1. **The image is the interface.** A white gallery wall by default (a neutral
+   dark wall is one click away and remembered per browser; the OS setting is
+   ignored), generous margins, no borders, no drop shadows, minimal chrome.
+   The viewer follows the theme.
 2. **Typography carries the identity.** One serif for titles and essay text
    (e.g. a classic book face), one quiet sans for UI and EXIF; small caps /
    letter-spacing for metadata.

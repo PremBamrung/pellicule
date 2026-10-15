@@ -172,7 +172,10 @@ async fn with_db<T: Send + 'static>(
 }
 
 async fn home(State(state): State<AppState>) -> Response {
-    let html = with_db(&state, |conn, layout| Ok(pages::home(conn, layout)?.render()?)).await;
+    let html = with_db(&state, |conn, layout| {
+        Ok(pages::home(conn, layout)?.render()?)
+    })
+    .await;
     html_response(html)
 }
 
@@ -212,7 +215,9 @@ async fn derivative(
         return not_found().await;
     };
     let valid = key.len() == 32
-        && key.bytes().all(|b| b.is_ascii_hexdigit() && !b.is_ascii_uppercase())
+        && key
+            .bytes()
+            .all(|b| b.is_ascii_hexdigit() && !b.is_ascii_uppercase())
         && rest
             .split_once('.')
             .and_then(|(variant, _)| derive::variant(variant))
@@ -229,7 +234,12 @@ async fn derivative(
         return (StatusCode::NOT_MODIFIED, [(header::ETAG, etag)]).into_response();
     }
 
-    let path = state.cache.join("d").join(&key[0..2]).join(&key[2..4]).join(&file);
+    let path = state
+        .cache
+        .join("d")
+        .join(&key[0..2])
+        .join(&key[2..4])
+        .join(&file);
     match tokio::fs::read(&path).await {
         Ok(bytes) => (
             [
@@ -261,7 +271,11 @@ async fn static_asset(
     {
         return (StatusCode::NOT_MODIFIED, [(header::ETAG, etag)]).into_response();
     }
-    let cache_control = if query.contains_key("v") { IMMUTABLE } else { "no-cache" };
+    let cache_control = if query.contains_key("v") {
+        IMMUTABLE
+    } else {
+        "no-cache"
+    };
     (
         [
             (header::CONTENT_TYPE, content_type(&path).to_string()),

@@ -45,8 +45,11 @@ pub fn run(config: &Config, conn: &mut Connection) -> Result<ScanSummary> {
     ensure_mounted(root)?;
 
     let started = Instant::now();
-    let generation: i64 =
-        conn.query_row("SELECT COALESCE(MAX(seen_gen), 0) + 1 FROM album", [], |r| r.get(0))?;
+    let generation: i64 = conn.query_row(
+        "SELECT COALESCE(MAX(seen_gen), 0) + 1 FROM album",
+        [],
+        |r| r.get(0),
+    )?;
     let mut summary = ScanSummary::default();
 
     let jobs = walk(root, conn, generation, &mut summary)?;
