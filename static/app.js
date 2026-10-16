@@ -592,6 +592,28 @@ if (photos) {
         });
       },
     });
+
+    // With a mouse, the controls fade after 2 s without the pointer moving;
+    // any movement or key brings them back. Not while a panel is open, the
+    // pointer rests on a control, or a control has keyboard focus.
+    let idle = null;
+    const wake = () => {
+      pswp.element.classList.remove("pswp--idle");
+      clearTimeout(idle);
+      idle = setTimeout(() => {
+        const busy =
+          !recipe.hidden ||
+          !panel.hidden ||
+          pswp.element.querySelector(".pswp__top-bar:hover, .pswp__button--arrow:hover, .pswp__button:focus-visible");
+        if (pswp.element.classList.contains("pswp--has_mouse") && !busy) {
+          pswp.element.classList.add("pswp--idle");
+        }
+      }, 2000);
+    };
+    pswp.element.addEventListener("pointermove", wake);
+    pswp.on("keydown", wake);
+    pswp.on("bindEvents", wake);
+    pswp.on("close", () => clearTimeout(idle));
   });
 
   lightbox.init();

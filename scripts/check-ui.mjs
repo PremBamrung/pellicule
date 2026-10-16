@@ -237,6 +237,14 @@ try {
   check("museum label", !!(await ev(`document.querySelector(".pswp__label")?.innerText`)));
   check("photo in the URL", (await ev("location.hash")).startsWith("#p="));
   await shot("viewer");
+  // With a mouse, the controls fade after 2 s still and come back on a move.
+  await send("Input.dispatchMouseEvent", { type: "mouseMoved", x: 700, y: 450 });
+  await send("Input.dispatchMouseEvent", { type: "mouseMoved", x: 710, y: 460 });
+  await sleep(2600);
+  check("controls fade when the mouse is still", await ev(`document.querySelector(".pswp").classList.contains("pswp--idle")`));
+  await send("Input.dispatchMouseEvent", { type: "mouseMoved", x: 720, y: 470 });
+  await sleep(200);
+  check("and come back when it moves", await ev(`!document.querySelector(".pswp").classList.contains("pswp--idle")`));
   await ev(`document.querySelector(".pswp__button--zoom").click()`);
   await sleep(800);
   check("label hides while zoomed", (await ev(`getComputedStyle(document.querySelector(".pswp__label")).opacity`)) === "0");

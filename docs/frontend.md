@@ -166,7 +166,11 @@ lazily when the viewer opens.
   scroll away; only a one-line frosted strip follows (`Pellicule · Japon ·
   Saturday 7 October`). Tablets and phones turned sideways (wider than
   720 px) get S / M / L and the desktop bar.
-- **Viewer** — PhotoSwipe with the museum label (hidden while zoomed in);
+- **Viewer** — PhotoSwipe with the museum label (hidden while zoomed in).
+  Every control stays, quieter than the photo: dimmed until pointed at, and
+  with a mouse the controls, arrows and cursor fade after 2 s without
+  movement (not while a panel is open, the pointer is on a control or a
+  control has keyboard focus); any movement or key brings them back;
   **slideshow** via the play button or the space bar (4 s per photo);
   **fullscreen** via its button or `f` (not on iPhone, where pages can't go
   fullscreen; closing the viewer leaves it); `i` hides the label; `?` or its

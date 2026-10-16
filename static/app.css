@@ -592,7 +592,28 @@ html .pswp { /* beats photoswipe.css, which loads later */
   --pswp-icon-color-secondary: var(--viewer);
   --pswp-icon-stroke-color: var(--viewer);
 }
-html .pswp .pswp__counter { color: var(--viewer-muted); text-shadow: none; white-space: nowrap; }
+html .pswp .pswp__counter {
+  color: var(--viewer-muted);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  text-shadow: none;
+  white-space: nowrap;
+}
+
+/* Controls stay, but quieter than the photo: dimmed and a little smaller
+   until pointed at. On desktop they fade out after a moment without the
+   pointer moving (app.js adds pswp--idle), and the cursor with them. */
+html .pswp .pswp__button { opacity: 0.55; transition: opacity 200ms ease; }
+html .pswp .pswp__button:hover,
+html .pswp .pswp__button:focus-visible,
+html .pswp .pswp__button[aria-expanded="true"] { opacity: 1; }
+.pswp__top-bar svg { scale: 0.85; }
+.pswp__top-bar,
+.pswp__button--arrow { transition: opacity 600ms ease; }
+html .pswp--idle .pswp__top-bar,
+html .pswp--idle .pswp__button--arrow { opacity: 0; pointer-events: none; }
+html .pswp--idle,
+html .pswp--idle * { cursor: none; }
 
 .pswp__label {
   position: absolute;
@@ -617,7 +638,7 @@ html .pswp--zoomed-in .pswp__label { display: block; opacity: 0; }
 .pswp--has_mouse .pswp__button--help { display: block; }
 .pswp__button--help text {
   fill: var(--pswp-icon-color);
-  font: 600 19px var(--font);
+  font: 500 19px var(--font);
 }
 .pswp__help {
   position: absolute;
@@ -826,4 +847,5 @@ html .pswp--zoomed-in .pswp__label { display: block; opacity: 0; }
 @media (prefers-reduced-motion: reduce) {
   @view-transition { navigation: none; }
   .album-cover img, .js .ph img, .hero-slide { transition: none; }
+  .pswp__top-bar, .pswp__button--arrow, html .pswp .pswp__button { transition: none; }
 }
