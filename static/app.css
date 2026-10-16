@@ -687,6 +687,8 @@ html .pswp--zoomed-in .pswp__label { display: block; opacity: 0; }
 }
 .pswp__recipe dt { color: var(--viewer-muted); }
 .pswp__recipe dd { margin: 0; }
+/* The label's lines, at the top of the phone sheet only. */
+.pswp__recipe-label { display: none; }
 
 .pswp__button--play svg { fill: var(--pswp-icon-color); }
 .pswp__button--fullscreen svg {
@@ -710,6 +712,13 @@ html .pswp--zoomed-in .pswp__label { display: block; opacity: 0; }
     padding: 16px 16px calc(18px + env(safe-area-inset-bottom));
     border-width: 1px 0 0;
   }
+  .pswp__recipe-label {
+    display: block;
+    margin: 0 0 14px;
+    padding-bottom: 14px;
+    border-bottom: 1px solid color-mix(in srgb, var(--viewer-ink) 14%, transparent);
+  }
+  .pswp--sheet .pswp__label { visibility: hidden; }
 }
 
 /* ---- library page ---------------------------------------------------- */

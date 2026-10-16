@@ -371,6 +371,29 @@ try {
     await shot("phone-album-strip");
     await ev("scrollTo(0, 0)");
   }
+  if (film) {
+    await ev(`document.querySelector("a.tile").click()`);
+    await sleep(1500);
+    await key("r", "r");
+    await sleep(300);
+    check(
+      "phone: the recipe sheet starts with the label",
+      await ev(`(() => {
+        const date = document.querySelector(".pswp__recipe-label .pswp__label-date");
+        return !!date && date.textContent === document.querySelector("a.tile").dataset.date
+          && getComputedStyle(document.querySelector(".pswp__label")).visibility === "hidden";
+      })()`),
+    );
+    check(
+      "phone: the photo fits above the sheet",
+      await ev(`document.querySelector(".pswp__item:not([aria-hidden=true]) .pswp__img:not(.pswp__img--placeholder)").getBoundingClientRect().bottom
+        <= document.querySelector(".pswp__recipe").getBoundingClientRect().top + 1`),
+    );
+    await shot("phone-viewer-recipe");
+    await key("Escape");
+    await key("Escape");
+    await sleep(800);
+  }
   // Back to the desktop default.
   await ev(`document.querySelector("[data-density=m]").click()`);
   await send("Emulation.setTouchEmulationEnabled", { enabled: false });

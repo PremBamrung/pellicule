@@ -146,7 +146,9 @@ Fujifilm X-T3, XF16-80mmF4 R OIS WR · Acros + R
 - Exposure bias in thirds: `+⅓ EV`, `−1⅔ EV`, `±0 EV` hidden.
 
 **Recipe** (the "Recipe" button or `r`; a panel beside the photo on
-desktop, a sheet at the bottom on phones; typography only, tabular numbers;
+desktop, a sheet at the bottom on phones that starts with the label's date,
+gear and exposure lines, since it covers the label, with the photo fitted
+above it; typography only, tabular numbers;
 it stays open from photo to photo until closed, Esc closes it first). Only
 the settings the camera recorded are listed, in this order:
 

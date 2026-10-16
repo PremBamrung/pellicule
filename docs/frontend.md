@@ -171,8 +171,9 @@ lazily when the viewer opens.
   fullscreen; closing the viewer leaves it); `i` hides the label; `?` or its
   button (shown once a mouse is used) lists the keys; on Fujifilm photos the
   film simulation ends the label's gear line, and the **Recipe** button or
-  `r` shows the in-camera recipe beside the photo (a bottom sheet on
-  phones; see [exif.md](exif.md)).
+  `r` shows the in-camera recipe beside the photo (on phones a bottom
+  sheet that starts with the label's lines, with the photo fitted above
+  it; see [exif.md](exif.md)).
 - **Library** — scans and their history (see [architecture](architecture.md)).
 
 ### Planned
@@ -196,5 +197,6 @@ Fujifilm X-T3, XF35mmF1.4 R
 
 The film simulation ends the gear line on Fujifilm photos ("… · Classic
 Chrome"); the **Recipe** button or `r` opens the full recipe beside the photo
-(a bottom sheet on phones), rendered from the page, no extra request. See
+(a bottom sheet on phones that repeats the label, which it covers), rendered
+from the page, no extra request. See
 [exif.md](exif.md).

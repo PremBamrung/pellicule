@@ -290,6 +290,9 @@ if (photos) {
   document.head.append(css);
 
   const narrow = matchMedia("(max-width: 720px)").matches;
+  // Height of the recipe sheet over the bottom of a phone screen: the photo
+  // fits in the space above it.
+  let sheet = 0;
   const lightbox = new PhotoSwipeLightbox({
     gallery: ".photos",
     // Filtered-out photos are skipped by the viewer too.
@@ -302,9 +305,10 @@ if (photos) {
     initialZoomLevel: "fit",
     secondaryZoomLevel: 1,
     maxZoomLevel: 1,
-    padding: narrow
-      ? { top: 44, bottom: 84, left: 0, right: 0 }
-      : { top: 32, bottom: 104, left: 32, right: 32 },
+    paddingFn: () =>
+      narrow
+        ? { top: 44, bottom: Math.max(84, sheet), left: 0, right: 0 }
+        : { top: 32, bottom: 104, left: 32, right: 32 },
     // Focus goes back to the photo last seen, not the one opened (below).
     returnFocus: false,
   });
@@ -469,8 +473,10 @@ if (photos) {
       });
     }
 
-    // Fujifilm recipe: the button or "r" opens it beside the photo (a sheet
-    // at the bottom on phones). Photos without one have no button.
+    // Fujifilm recipe: the button or "r" opens it beside the photo. On
+    // phones it is a sheet at the bottom that starts with the label's lines,
+    // since it covers the label. Photos without one have no button.
+    sheet = 0;
     const recipe = document.createElement("aside");
     recipe.className = "pswp__recipe";
     recipe.id = "pswp-recipe";
@@ -487,7 +493,19 @@ if (photos) {
       recipeButton.hidden = !rows.length;
       recipe.hidden = !(recipeOpen && rows.length);
       recipeButton.setAttribute("aria-expanded", String(!recipe.hidden));
-      if (recipe.hidden) return;
+      if (recipe.hidden) return fitAbove(0);
+      const label = document.createElement("div");
+      label.className = "pswp__recipe-label";
+      for (const [className, text] of [
+        ["pswp__label-date", data.date],
+        ["pswp__label-gear", data.gear],
+        ["pswp__label-exposure", data.exposure],
+      ]) {
+        if (!text) continue;
+        const div = line(className);
+        div.textContent = text;
+        label.append(div);
+      }
       const title = document.createElement("p");
       title.className = "pswp__recipe-film";
       title.textContent = data.fFilm || "Recipe";
@@ -499,7 +517,14 @@ if (photos) {
         dd.textContent = value;
         list.append(dt, dd);
       }
-      recipe.replaceChildren(title, list);
+      recipe.replaceChildren(label, title, list);
+      fitAbove(narrow ? recipe.offsetHeight : 0);
+    };
+    const fitAbove = (height) => {
+      pswp.element.classList.toggle("pswp--sheet", height > 0);
+      if (height === sheet) return;
+      sheet = height;
+      pswp.updateSize(true);
     };
     const toggleRecipe = (open = !recipeOpen) => {
       recipeOpen = open;
