@@ -105,7 +105,33 @@ try {
   const rows = await ev(`document.querySelectorAll(".hero-row").length`);
   const hrefs = await ev(`[...document.querySelectorAll(".album-card")].map(a => a.getAttribute("href"))`);
   check("album cards", hrefs.length > 0, hrefs.join(", "));
+  check(
+    "cards show only the cover",
+    await ev(`[...document.querySelectorAll(".album-card")].every((card) =>
+      [...card.querySelectorAll("img")].every((img) => img.closest(".album-cover")))`),
+  );
   await shot("home");
+  // The pointer flips a cover through photos from the album.
+  const flip = await ev(`(() => {
+    const card = [...document.querySelectorAll(".album-card")].find((c) => c.querySelector(".album-flip"));
+    if (!card) return null;
+    card.scrollIntoView({ block: "center" });
+    const box = card.querySelector(".album-cover").getBoundingClientRect();
+    return { x: box.left, y: box.top + box.height / 2, w: box.width, src: card.querySelector(".album-cover img").currentSrc };
+  })()`);
+  if (flip) {
+    const move = (x) => send("Input.dispatchMouseEvent", { type: "mouseMoved", x, y: flip.y });
+    await move(flip.x + 2);
+    await sleep(300);
+    await move(flip.x + flip.w - 4);
+    await sleep(1500);
+    await move(flip.x + flip.w - 3);
+    await sleep(300);
+    const flipped = await ev(`document.elementFromPoint(${flip.x + flip.w - 3}, ${flip.y}).closest(".album-cover").querySelector("img").currentSrc`);
+    check("cover flips under the pointer", flipped && flipped !== flip.src);
+    await send("Input.dispatchMouseEvent", { type: "mouseMoved", x: 1, y: 1 });
+    await ev(`scrollTo(0, 0)`);
+  } else console.log("skip cover flip: no album has enough photos");
   if (rows > 1) {
     check("home photo dots", await ev(`!document.querySelector(".hero-dots").hidden`), `${rows} rows`);
     await sleep(9000);
@@ -154,6 +180,10 @@ try {
   await go(albumHref);
   const tiles = await ev(`document.querySelectorAll("a.tile").length`);
   check("album grid", tiles > 0, `${albumHref}, ${tiles} photos`);
+  const edges = await ev(`[document.querySelector(".grid").getBoundingClientRect().left,
+    document.querySelector("a.tile").getBoundingClientRect().left,
+    document.querySelector(".album-head h1").getBoundingClientRect().left].map(Math.round)`);
+  check("grid aligned with the title", Math.abs(edges[1] - edges[2]) <= 6, `tile ${edges[1]}px, title ${edges[2]}px`);
   const days = await ev(`document.querySelectorAll(".day").length`);
   const hasFilters = await ev(`!!document.querySelector(".filters")`);
   if (hasFilters) check("filters shown", await ev(`!document.querySelector(".filters").hidden`));

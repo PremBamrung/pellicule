@@ -120,16 +120,16 @@ pub struct AlbumCard {
     /// "X-T3 · X-E3 · 35–84mm" (35mm-equivalent range); empty without EXIF.
     pub gear: String,
     pub cover: Option<Tile>,
-    /// A few photos spread through the album, after the cover; empty for
-    /// small albums.
-    pub strip: Vec<Tile>,
+    /// A few photos spread through the album, after the cover, that the
+    /// pointer flips the cover through; empty for small albums.
+    pub flips: Vec<Tile>,
     /// Average colours sampled through the album in order ("#a0b1c2").
     pub palette: Vec<String>,
     latest: Option<String>,
 }
 
-/// Photos in a card's strip; albums with fewer others show none.
-const STRIP_LEN: usize = 4;
+/// Photos a card's cover flips through; albums with fewer others have none.
+const FLIP_LEN: usize = 4;
 /// Colours in a card's band.
 const PALETTE_LEN: usize = 12;
 
@@ -416,7 +416,7 @@ fn child_cards(conn: &Connection, parent_id: i64) -> Result<Vec<AlbumCard>> {
 
 /// `None` when nothing below the album can be shown.
 fn album_card(conn: &Connection, album: AlbumRow) -> Result<Option<AlbumCard>> {
-    // Every photo below the album in order: the strip and the colours are
+    // Every photo below the album in order: the flips and the colours are
     // spread through it.
     let mut stmt = conn.prepare(&format!(
         "SELECT m.id, m.content_key, m.avg_rgb FROM media m JOIN album a ON a.id = m.album_id
@@ -476,8 +476,8 @@ fn album_card(conn: &Connection, album: AlbumRow) -> Result<Option<AlbumCard>> {
         .filter(|(_, key, _)| cover.as_ref().is_none_or(|c| &c.key != key))
         .map(|(id, _, _)| *id)
         .collect();
-    let strip = if others.len() >= STRIP_LEN {
-        spread(others.len(), STRIP_LEN)
+    let flips = if others.len() >= FLIP_LEN {
+        spread(others.len(), FLIP_LEN)
             .map(|i| tile_by_id(conn, others[i]))
             .collect::<Result<_>>()?
     } else {
@@ -499,7 +499,7 @@ fn album_card(conn: &Connection, album: AlbumRow) -> Result<Option<AlbumCard>> {
         gear: gear.join(" · "),
         title: album.name,
         cover,
-        strip,
+        flips,
         palette,
         latest: last,
     }))

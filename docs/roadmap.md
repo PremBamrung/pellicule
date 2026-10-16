@@ -12,7 +12,7 @@ X-T3/X-E3 JPEGs) and is ready to be tried on the NAS with Docker Compose.
 |---|---|
 | Scan & index | ✅ incremental, content-keyed, crash/unmount-safe |
 | Derivatives | ✅ 3 WebP sizes + JPEG zoom size at scan time, ThumbHash, average colour |
-| Browsing | ✅ home photos, album cards (strip, colours, dates, gear), justified grid, day sections, viewer |
+| Browsing | ✅ home photos, album cards (cover flip, colours, dates, gear), justified grid, day sections, viewer |
 | Filters | ✅ day, camera, lens, focal range (in the browser, URL state) |
 | Library page | ✅ rescan / rebuild / cancel, live progress, history, failures |
 | Look | ✅ white by default + dark toggle, Geist, blur-up placeholders, transitions |
@@ -51,6 +51,12 @@ X-T3/X-E3 JPEGs) and is ready to be tried on the NAS with Docker Compose.
 ### Frontend pass 3
 - Home photos: six random photos crossfading, each linking to its place in
   the album (`/a/<album>#p=<key>`); replaced by rows of photos in pass 4.
+
+### Frontend pass 6
+- Album cards: cover and colour band only; the strip of four photos is gone,
+  the cover still flips through them under the pointer.
+- Album grid aligned with the page margins instead of running to the window
+  edge.
 
 ### Faster scans
 - Pipeline v3: the 4096 px zoom size as JPEG q85, WebP at effort 2. A full
@@ -133,7 +139,7 @@ X-T3/X-E3 JPEGs) and is ready to be tried on the NAS with Docker Compose.
 
 - Film simulation pages (`/film/classic-chrome`) and per-album film summary.
 - Previous / next album links, original download (and zooming into it).
-- Filmstrip / contact-sheet album layouts.
+- Contact-sheet album layout (no film decoration such as sprocket holes).
 - Map view (private only), search by EXIF.
 - AVIF twins; on-the-fly HLS (go-vod approach) if long videos need it.
 - Integration hook for the culling tool ("publish album" → rescan path).

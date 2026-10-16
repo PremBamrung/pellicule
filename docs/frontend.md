@@ -35,6 +35,10 @@ no SPA framework, no Node toolchain.
 .grid::after { content: ""; flex-grow: 1e6; }   /* keeps the last row from stretching */
 ```
 
+The grid keeps the same side margins as the header and the title: photos
+hang on the wall with space around them rather than running to the window
+edge.
+
 No JS virtualization below ~2k items: native `loading="lazy"` plus
 `content-visibility: auto` on row blocks. The first image gets
 `fetchpriority="high"`.
@@ -49,9 +53,6 @@ and open the albums.
 Each album card, the same on the home page and for sub-albums:
 
 - **Cover**: the first landscape photo (portraits crop badly in 3:2).
-- **Strip**: four photos spread evenly through the album's timeline after
-  the cover (beginning, middle, end of a trip); the same on every visit.
-  Albums with fewer than four other photos show none.
 - **Colour band**: twelve average colours sampled through the album in
   order, from the colour already stored per photo. Each album gets a
   fingerprint at no extra cost.
@@ -61,11 +62,13 @@ Each album card, the same on the home page and for sub-albums:
 - **Gear**: `X-T3 · X-E3 · 35–84mm`: the three most used camera models,
   then the 35mm-equivalent focal range.
 
-With a mouse, moving across the cover flips it through the cover and the
-strip photos (left to right), and pointing at a strip photo shows it; the
-other strip photos dim. Larger versions load when the pointer arrives and
-the cover only switches to a decoded one, so it never flashes. Touch screens
-keep the plain card.
+With a mouse, moving across the cover flips it, left to right, through four
+photos spread evenly through the album's timeline (beginning, middle, end of
+a trip), the same on every visit; albums with fewer than four other photos
+don't flip. They are not shown as thumbnails: the card stays a cover and a
+colour band. Larger versions load when the pointer arrives and the cover
+only switches to a decoded one, so it never flashes. Touch screens keep the
+plain card.
 
 ## Filters
 
@@ -158,8 +161,9 @@ lazily when the viewer opens.
 
 - **Album (essay)** — text and images in the sequence of `index.md`: full-width
   single images, rows of 2–3, captions in the margin on wide screens.
-  Further layouts to explore later: filmstrip (sprocket-hole band, horizontal
-  scroll-snap) and contact sheet, which suit a Fuji / film identity.
+  A contact-sheet layout may be explored later. No film decoration
+  (sprocket holes, film-strip graphics): the identity comes from the photos
+  and the recipe, not from imitating film.
 - **Share pages** — same templates, no navigation outside the shared subtree.
 
 ## EXIF presentation
