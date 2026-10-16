@@ -24,7 +24,8 @@
   --font: "Geist", ui-sans-serif, system-ui, sans-serif;
 
   --gutter: clamp(16px, 4vw, 56px);
-  --gap: 4px;
+  /* Air between photos, like works on a wall. */
+  --gap: 16px;
   --row: 300px; /* medium; keep in sync with ROW_HEIGHT in src/pages.rs */
   --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
 }
@@ -142,7 +143,7 @@ main { padding-bottom: 120px; }
 .hero { margin: 8px var(--gutter) 0; }
 
 .hero-frame {
-  --hero-gap: 8px;
+  --hero-gap: var(--gap);
   position: relative;
   display: flex;
   gap: var(--hero-gap);
@@ -510,7 +511,10 @@ main { padding-bottom: 120px; }
 }
 
 /* ---- justified grid: rows of equal height, widths proportional to the
-   aspect ratio; the last row keeps its natural size. ------------------- */
+   aspect ratio; the last row keeps its natural size. Tiles start a bit
+   below the target height and grow to fill the row, so a row can take one
+   more photo instead of stretching a few wide ones: rows land between
+   about 0.85x and 1.2x the target, not 1x to 1.5x. -------------------- */
 
 .grid {
   display: flex;
@@ -524,7 +528,7 @@ main { padding-bottom: 120px; }
 }
 
 .tile {
-  flex: calc(var(--ar) * 100) 1 calc(var(--ar) * var(--row));
+  flex: calc(var(--ar) * 100) 1 calc(var(--ar) * var(--row) * 0.85);
   position: relative;
   overflow: hidden;
 }

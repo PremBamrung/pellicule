@@ -40,8 +40,15 @@ const check = (name, ok, detail = "") => {
 };
 
 try {
-  await sleep(1500);
-  const targets = await (await fetch(`http://127.0.0.1:${port}/json`)).json();
+  // Chrome can take a few seconds to start listening.
+  let targets = null;
+  for (let tries = 0; !targets; tries++) {
+    await sleep(500);
+    targets = await fetch(`http://127.0.0.1:${port}/json`).then((r) => r.json(), (error) => {
+      if (tries > 40) throw error;
+      return null;
+    });
+  }
   const ws = new WebSocket(targets.find((t) => t.type === "page").webSocketDebuggerUrl);
   await new Promise((r) => ws.addEventListener("open", r));
 

@@ -30,14 +30,20 @@ no SPA framework, no Node toolchain.
 ```
 
 ```css
-.grid  { display: flex; flex-wrap: wrap; gap: 4px; }
-.tile  { flex: calc(var(--ar) * 1000) 1 calc(var(--ar) * var(--row-h)); }
+.grid  { display: flex; flex-wrap: wrap; gap: var(--gap); }   /* 16 px, 8 px on phones */
+.tile  { flex: calc(var(--ar) * 100) 1 calc(var(--ar) * var(--row) * 0.85); }
 .grid::after { content: ""; flex-grow: 1e6; }   /* keeps the last row from stretching */
 ```
 
-The grid keeps the same side margins as the header and the title: photos
-hang on the wall with space around them rather than running to the window
-edge.
+The grid keeps the same side margins as the header and the title, and
+16 px between photos (8 px on phones; the home rows use the same gap):
+photos hang on the wall with space around them, each one a work rather than
+a cell of a contact sheet.
+
+Tiles start at 0.85x the target row height and grow to fill the row, so a
+row takes one more photo instead of stretching a few wide ones: rows land
+between about 0.85x and 1.2x the target (1x to 1.5x with the basis at the
+target). The last row stays at 0.85x.
 
 No JS virtualization below ~2k items: native `loading="lazy"` plus
 `content-visibility: auto` on row blocks. The first image gets
