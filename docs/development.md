@@ -23,18 +23,8 @@ PRIVATE_PORT=127.0.0.1:8080   # loopback only: the private side has no login
 PUBLIC_PORT=8081
 ```
 
-```toml
-# pellicule.docker.toml (container paths)
-[library]
-root  = "/photos"
-cache = "/cache"
-
-[server]
-private_addr = "0.0.0.0:8080"
-public_addr  = "0.0.0.0:8081"
-
-[scan]
-workers = 2   # keep the Mac usable while scanning
+```sh
+cp pellicule.example.toml pellicule.docker.toml   # container paths; workers = 2 keeps the Mac usable
 ```
 
 `PRIVATE_PORT` keeps `127.0.0.1:` on a laptop: `compose.yaml` publishes the

@@ -62,29 +62,35 @@ NAS library (read-only)            Pellicule                         Viewers
 
 ## Quick start
 
-On the NAS (Docker Compose, Tailscale on the host):
+On the NAS (Docker Compose v2, Tailscale on the host); the full steps, with
+what to decide first and what to expect, are in
+[deployment](docs/deployment.md#first-installation-on-the-nas):
 
 ```sh
-cp .env.example .env              # PHOTOS_DIR, CACHE_DIR, PUID/PGID
-docker compose up -d --build     # scans the library in the background
-sudo tailscale funnel --bg 8081   # public share links
+git clone git@github.com:PremBamrung/pellicule.git && cd pellicule
+cp .env.example .env              # PHOTOS_DIR, CACHE_DIR (SSD), PUID/PGID
+docker compose up -d --build     # first build ~10–20 min, then scans in the background
 ```
 
 Private gallery on `http://<nas>:8080` (LAN / tailnet); scans are started and
 followed from its **Library** page. The private side has **no login**: the
-LAN / tailnet is the trust boundary, so never port-forward it. See
-[deployment](docs/deployment.md).
+LAN / tailnet is the trust boundary, so never port-forward it.
 
-Configuration (`docker/pellicule.toml`, or the file `PELLICULE_TOML` names in `.env`):
+Configuration: `docker/pellicule.toml` (container paths; which host ports
+reach the listeners is set in `.env`). For other settings, start from
+`pellicule.example.toml` and point `PELLICULE_TOML` at your copy:
 
 ```toml
 [library]
-root  = "/photos"               # mounted read-only
-cache = "/var/lib/pellicule"    # previews, videos, sqlite
+root  = "/photos"               # PHOTOS_DIR, mounted read-only
+cache = "/cache"                # CACHE_DIR: previews, videos, SQLite
 
 [server]
-private_addr = "0.0.0.0:8080"   # reachable on LAN / tailnet, no login
-public_addr  = "127.0.0.1:8081" # exposed with `tailscale funnel 8081`
+private_addr = "0.0.0.0:8080"   # published as PRIVATE_PORT: LAN / tailnet, no login
+public_addr  = "0.0.0.0:8081"   # published on host 127.0.0.1 only, for `tailscale funnel`
+
+[scan]
+# workers = 2                   # default: half the CPU cores
 ```
 
 ## Development

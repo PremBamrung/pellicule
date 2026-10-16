@@ -1,12 +1,15 @@
-# Copy to pellicule.toml and adjust.
+# A custom config for the container: copy it (e.g. to pellicule.docker.toml,
+# which git ignores) and set PELLICULE_TOML to the copy in .env. Without it
+# the bundled docker/pellicule.toml is used. Paths are container paths;
+# PHOTOS_DIR and CACHE_DIR in .env decide what is mounted there.
 
 [library]
-root  = "/photos"               # mounted read-only; never written to
-cache = "/var/lib/pellicule"    # previews, transcoded videos, SQLite index
+root  = "/photos"   # mounted read-only
+cache = "/cache"
 
 [server]
-private_addr = "0.0.0.0:8080"   # full gallery, LAN / tailnet; no login, never port-forward
-public_addr  = "127.0.0.1:8081" # share links only: `tailscale funnel 8081`
+private_addr = "0.0.0.0:8080"   # published as PRIVATE_PORT (.env)
+public_addr  = "0.0.0.0:8081"   # published on host 127.0.0.1 only, for `tailscale funnel`
 
 [scan]
-# workers = 2                   # files processed in parallel (default: half the CPU cores)
+workers = 2   # files processed in parallel (default: half the CPU cores)
