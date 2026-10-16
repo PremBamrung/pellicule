@@ -12,7 +12,7 @@ X-T3/X-E3 JPEGs) and is ready to be tried on the NAS with Docker Compose.
 |---|---|
 | Scan & index | ✅ incremental, content-keyed, crash/unmount-safe |
 | Derivatives | ✅ 3 WebP sizes + JPEG zoom size at scan time, ThumbHash, average colour |
-| Browsing | ✅ home photos, album cards (cover flip, dates), justified grid, day sections, next album, viewer |
+| Browsing | ✅ home photos, album cards (cover flip, dates), justified grid, day sections, viewer |
 | Filters | ✅ day, camera, lens, focal range (in the browser, URL state) |
 | Library page | ✅ rescan / rebuild / cancel, live progress, history, failures |
 | Look | ✅ white by default + dark toggle, Geist, blur-up placeholders, transitions |
@@ -74,7 +74,6 @@ X-T3/X-E3 JPEGs) and is ready to be tried on the NAS with Docker Compose.
 - Album cards: cover, title, count and dates; the colour band and gear line
   are gone.
 - Viewer: controls dimmed, fading after 2 s without the mouse moving.
-- "Next" album after the last row, wrapping round.
 
 ### Docker workflow
 - Build, run and test in Docker on the NAS's Debian and libvips

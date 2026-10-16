@@ -55,8 +55,6 @@ pub struct AlbumPage<'a> {
     /// otherwise a single unlabelled section.
     pub sections: Vec<Section>,
     pub filters: Vec<FilterGroup>,
-    /// The next album among its siblings, shown after the grid.
-    pub next: Option<AlbumCard>,
 }
 
 pub struct Section {
@@ -283,7 +281,6 @@ pub fn album<'a>(
         albums: child_cards(conn, album.id)?,
         filters: filters(&tiles),
         sections: by_day(tiles),
-        next: next_album(conn, album.id)?,
         title: album.name,
     }))
 }
@@ -416,37 +413,6 @@ fn child_cards(conn: &Connection, parent_id: i64) -> Result<Vec<AlbumCard>> {
     // Most recent first, like a portfolio. ISO timestamps sort as text.
     cards.sort_by(|a, b| b.latest.cmp(&a.latest));
     Ok(cards)
-}
-
-/// The album after this one among its siblings, in the cards' order (most
-/// recent first), wrapping round after the last; `None` when it has no
-/// sibling with something to show.
-fn next_album(conn: &Connection, album_id: i64) -> Result<Option<AlbumCard>> {
-    let parent: Option<i64> = conn.query_row(
-        "SELECT parent_id FROM album WHERE id = ?1",
-        params![album_id],
-        |r| r.get(0),
-    )?;
-    let Some(parent) = parent else {
-        return Ok(None);
-    };
-    let mut siblings = Vec::new();
-    for sibling in children(conn, parent)? {
-        let (count, _, latest) = album_stats(conn, &sibling.rel_path)?;
-        if count > 0 {
-            siblings.push((latest, sibling));
-        }
-    }
-    siblings.sort_by(|a, b| b.0.cmp(&a.0));
-    let len = siblings.len();
-    let Some(at) = siblings.iter().position(|(_, s)| s.id == album_id) else {
-        return Ok(None);
-    };
-    if len < 2 {
-        return Ok(None);
-    }
-    let (_, next) = siblings.swap_remove((at + 1) % len);
-    album_card(conn, next)
 }
 
 /// `None` when nothing below the album can be shown.

@@ -4,7 +4,7 @@
     <img src="{{ cover.view_url }}" srcset="{{ cover.cover_srcset }}"
          sizes="(max-width: 720px) 100vw, 50vw"
          width="{{ cover.thumb_width }}" height="{{ cover.thumb_height }}"
-         loading="{% if eager %}eager{% else %}lazy{% endif %}" decoding="async" alt="">
+         loading="{% if loop.index0 < 4 %}eager{% else %}lazy{% endif %}" decoding="async" alt="">
   </span>
   {% endif %}
   {# Photos from through the album: app.js flips the cover through them

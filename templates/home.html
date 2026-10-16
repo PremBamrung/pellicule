@@ -43,7 +43,7 @@
   </header>
   {% if !albums.is_empty() %}
   <div class="albums">
-    {% for album in albums %}{% let eager = loop.index0 < 4 %}{% include "album_card.html" %}{% endfor %}
+    {% for album in albums %}{% include "album_card.html" %}{% endfor %}
   </div>
   {% endif %}
   {% if !tiles.is_empty() %}
