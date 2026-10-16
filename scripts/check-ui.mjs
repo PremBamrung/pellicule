@@ -117,6 +117,11 @@ try {
     await ev(`[...document.querySelectorAll(".album-card")].every((card) =>
       [...card.querySelectorAll("img")].every((img) => img.closest(".album-cover")))`),
   );
+  check(
+    "cards are cover, title and summary",
+    await ev(`!document.querySelector(".album-palette, .album-card-gear")
+      && [...document.querySelectorAll(".album-card")].every((c) => c.querySelector(".album-card-title") && c.querySelector(".album-card-summary"))`),
+  );
   await shot("home");
   // The pointer flips a cover through photos from the album.
   const flip = await ev(`(() => {

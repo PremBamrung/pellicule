@@ -117,21 +117,15 @@ pub struct AlbumCard {
     pub title: String,
     /// "3 albums · 100 photographs · 6–14 Oct 2023 · 5 days"
     pub summary: String,
-    /// "X-T3 · X-E3 · 35–84mm" (35mm-equivalent range); empty without EXIF.
-    pub gear: String,
     pub cover: Option<Tile>,
     /// A few photos spread through the album, after the cover, that the
     /// pointer flips the cover through; empty for small albums.
     pub flips: Vec<Tile>,
-    /// Average colours sampled through the album in order ("#a0b1c2").
-    pub palette: Vec<String>,
     latest: Option<String>,
 }
 
 /// Photos a card's cover flips through; albums with fewer others have none.
 const FLIP_LEN: usize = 4;
-/// Colours in a card's band.
-const PALETTE_LEN: usize = 12;
 
 pub struct Tile {
     /// Content key: names the derivatives, and `#p=<key>` links to the tile.
@@ -420,65 +414,34 @@ fn child_cards(conn: &Connection, parent_id: i64) -> Result<Vec<AlbumCard>> {
 
 /// `None` when nothing below the album can be shown.
 fn album_card(conn: &Connection, album: AlbumRow) -> Result<Option<AlbumCard>> {
-    // Every photo below the album in order: the flips and the colours are
-    // spread through it.
+    // Every photo below the album in order: the flips are spread through it.
     let mut stmt = conn.prepare(&format!(
-        "SELECT m.id, m.content_key, m.avg_rgb FROM media m JOIN album a ON a.id = m.album_id
+        "SELECT m.id, m.content_key FROM media m JOIN album a ON a.id = m.album_id
          WHERE {IN_SUBTREE}
          ORDER BY m.taken_at IS NULL, m.taken_at, a.rel_path, m.file_name"
     ))?;
-    let photos: Vec<(i64, String, Option<u32>)> = stmt
-        .query_map(params![album.rel_path], |r| {
-            Ok((r.get(0)?, r.get(1)?, r.get(2)?))
-        })?
+    let photos: Vec<(i64, String)> = stmt
+        .query_map(params![album.rel_path], |r| Ok((r.get(0)?, r.get(1)?)))?
         .collect::<rusqlite::Result<_>>()?;
     if photos.is_empty() {
         return Ok(None);
     }
 
-    let (count, first, last, days, focal_min, focal_max): CardStats = conn.query_row(
+    let (count, first, last, days): (i64, Option<String>, Option<String>, i64) = conn.query_row(
         &format!(
             "SELECT count(*), min(m.taken_at), max(m.taken_at),
-                    count(DISTINCT substr(m.taken_at, 1, 10)),
-                    min(coalesce(m.focal_35mm, m.focal_mm)), max(coalesce(m.focal_35mm, m.focal_mm))
+                    count(DISTINCT substr(m.taken_at, 1, 10))
              FROM media m JOIN album a ON a.id = m.album_id WHERE {IN_SUBTREE}"
         ),
         params![album.rel_path],
-        |r| {
-            Ok((
-                r.get(0)?,
-                r.get(1)?,
-                r.get(2)?,
-                r.get(3)?,
-                r.get(4)?,
-                r.get(5)?,
-            ))
-        },
+        |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?)),
     )?;
-
-    // Most used first.
-    let mut stmt = conn.prepare(&format!(
-        "SELECT m.make, m.model FROM media m JOIN album a ON a.id = m.album_id
-         WHERE {IN_SUBTREE} AND m.model IS NOT NULL
-         GROUP BY m.make, m.model ORDER BY count(*) DESC, m.model LIMIT 3"
-    ))?;
-    let mut gear: Vec<String> = stmt
-        .query_map(params![album.rel_path], |r| {
-            let make: Option<String> = r.get(0)?;
-            let model: String = r.get(1)?;
-            Ok(model_name(make.as_deref(), &model))
-        })?
-        .collect::<rusqlite::Result<_>>()?;
-    gear.dedup();
-    if let (Some(min), Some(max)) = (focal_min, focal_max) {
-        gear.push(focal_span(min, max));
-    }
 
     let cover = cover(conn, &album.rel_path)?;
     let others: Vec<i64> = photos
         .iter()
-        .filter(|(_, key, _)| cover.as_ref().is_none_or(|c| &c.key != key))
-        .map(|(id, _, _)| *id)
+        .filter(|(_, key)| cover.as_ref().is_none_or(|c| &c.key != key))
+        .map(|(id, _)| *id)
         .collect();
     let flips = if others.len() >= FLIP_LEN {
         spread(others.len(), FLIP_LEN)
@@ -487,10 +450,6 @@ fn album_card(conn: &Connection, album: AlbumRow) -> Result<Option<AlbumCard>> {
     } else {
         Vec::new()
     };
-    let palette = spread(photos.len(), PALETTE_LEN.min(photos.len()))
-        .map(|i| format!("#{:06x}", photos[i].2.unwrap_or(0x30_30_30)))
-        .collect();
-
     Ok(Some(AlbumCard {
         href: album_href(&album.rel_path),
         summary: card_summary(
@@ -500,23 +459,12 @@ fn album_card(conn: &Connection, album: AlbumRow) -> Result<Option<AlbumCard>> {
             last.as_deref(),
             days,
         ),
-        gear: gear.join(" · "),
         title: album.name,
         cover,
         flips,
-        palette,
         latest: last,
     }))
 }
-
-type CardStats = (
-    i64,
-    Option<String>,
-    Option<String>,
-    i64,
-    Option<f64>,
-    Option<f64>,
-);
 
 /// Sub-albums with something to show.
 fn sub_albums(conn: &Connection, album_id: i64) -> Result<usize> {
@@ -1089,31 +1037,6 @@ fn day_span(first: Option<&str>, last: Option<&str>) -> Option<String> {
     })
 }
 
-/// "35–84mm", or "35mm" for a single focal length.
-fn focal_span(min: f64, max: f64) -> String {
-    let (min, max) = (min.round() as i64, max.round() as i64);
-    if min == max {
-        format!("{min}mm")
-    } else {
-        format!("{min}–{max}mm")
-    }
-}
-
-/// "X-T3", "EOS R6": the model without the maker's name, for short lists.
-fn model_name(make: Option<&str>, model: &str) -> String {
-    let model = model.trim();
-    match make.map(str::trim) {
-        Some(make)
-            if model
-                .get(..make.len())
-                .is_some_and(|start| start.eq_ignore_ascii_case(make)) =>
-        {
-            model[make.len()..].trim().to_string()
-        }
-        _ => model.to_string(),
-    }
-}
-
 fn parse(value: &str) -> Option<NaiveDateTime> {
     NaiveDateTime::parse_from_str(value, "%Y-%m-%dT%H:%M:%S").ok()
 }
@@ -1320,15 +1243,6 @@ mod tests {
             "3 albums · 100 photographs · 6–14 Oct 2023 · 5 days"
         );
         assert_eq!(card_summary(0, 1, None, None, 0), "1 photograph");
-    }
-
-    #[test]
-    fn card_gear() {
-        assert_eq!(model_name(Some("FUJIFILM"), "X-T3"), "X-T3");
-        assert_eq!(model_name(Some("Canon"), "Canon EOS R6"), "EOS R6");
-        assert_eq!(model_name(None, "X-E3"), "X-E3");
-        assert_eq!(focal_span(35.0, 84.4), "35–84mm");
-        assert_eq!(focal_span(35.0, 35.2), "35mm");
     }
 
     #[test]

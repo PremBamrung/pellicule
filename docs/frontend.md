@@ -59,20 +59,21 @@ and open the albums.
 Each album card, the same on the home page and for sub-albums:
 
 - **Cover**: the first landscape photo (portraits crop badly in 3:2).
-- **Colour band**: twelve average colours sampled through the album in
-  order, from the colour already stored per photo. Each album gets a
-  fingerprint at no extra cost.
+- **Title**.
 - **Summary**: `3 albums · 100 photographs · 6–14 Oct 2023 · 5 days`.
   Sub-albums only when there are some; days are distinct shooting days,
   shown when there are several.
-- **Gear**: `X-T3 · X-E3 · 35–84mm`: the three most used camera models,
-  then the 35mm-equivalent focal range.
+
+Nothing else: like an exhibition label, a title and a date. The gear lives
+in the viewer's label and the album's filters. (A band of average colours
+was tried and dropped: averages all drift to the same grey-brown, so every
+album's band looked alike.)
 
 With a mouse, moving across the cover flips it, left to right, through four
 photos spread evenly through the album's timeline (beginning, middle, end of
 a trip), the same on every visit; albums with fewer than four other photos
 don't flip. They are not shown as thumbnails: the card stays a cover and a
-colour band. Larger versions load when the pointer arrives and the cover
+title. Larger versions load when the pointer arrives and the cover
 only switches to a decoded one, so it never flashes. Touch screens keep the
 plain card.
 

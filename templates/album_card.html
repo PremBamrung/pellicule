@@ -12,10 +12,6 @@
   {% for photo in album.flips %}
   <span class="album-flip" hidden data-src="{{ photo.view_url }}" data-srcset="{{ photo.cover_srcset }}"></span>
   {% endfor %}
-  {% if album.palette.len() > 1 %}
-  <span class="album-palette" aria-hidden="true">{% for colour in album.palette %}<span style="background-color: {{ colour }}"></span>{% endfor %}</span>
-  {% endif %}
   <span class="album-card-title">{{ album.title }}</span>
   <span class="album-card-summary">{{ album.summary }}</span>
-  {% if !album.gear.is_empty() %}<span class="album-card-gear">{{ album.gear }}</span>{% endif %}
 </a>
