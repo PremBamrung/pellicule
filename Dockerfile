@@ -1,13 +1,17 @@
 # syntax=docker/dockerfile:1
 
-# ---- build ------------------------------------------------------------------
-FROM rust:1-slim-trixie AS build
+# ---- base: Rust and libvips, shared by the build and the checks -------------
+FROM rust:1-slim-trixie AS base
 
 RUN apt-get update \
  && apt-get install -y --no-install-recommends pkg-config libvips-dev \
  && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /src
+
+# ---- build ------------------------------------------------------------------
+FROM base AS build
+
 COPY . .
 
 # Cache mounts keep the registry and build artifacts between builds, so
@@ -17,8 +21,27 @@ RUN --mount=type=cache,target=/usr/local/cargo/registry \
     cargo build --release --locked \
  && cp target/release/pellicule /usr/local/bin/pellicule
 
+# ---- test: `docker build --target test .` -----------------------------------
+# fmt, clippy and the tests against Debian's libvips, the one the NAS runs.
+# Never built by `docker compose up`. exiftool is the oracle for the
+# Fujifilm golden tests (docs/exif.md), never a runtime dependency.
+FROM base AS test
+
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends libimage-exiftool-perl \
+ && rm -rf /var/lib/apt/lists/* \
+ && rustup component add rustfmt clippy
+
+COPY . .
+
+RUN --mount=type=cache,target=/usr/local/cargo/registry \
+    --mount=type=cache,target=/src/target \
+    cargo fmt --check \
+ && cargo clippy --all-targets --locked -- -D warnings \
+ && cargo test --locked
+
 # ---- runtime ----------------------------------------------------------------
-FROM debian:trixie-slim
+FROM debian:trixie-slim AS runtime
 
 RUN apt-get update \
  && apt-get install -y --no-install-recommends libvips42t64 ffmpeg ca-certificates tini tzdata \

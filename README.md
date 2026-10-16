@@ -75,7 +75,7 @@ followed from its **Library** page. The private side has **no login**: the
 LAN / tailnet is the trust boundary, so never port-forward it. See
 [deployment](docs/deployment.md).
 
-Configuration (`docker/pellicule.toml` in the container, `pellicule.toml` locally):
+Configuration (`docker/pellicule.toml`, or the file `PELLICULE_TOML` names in `.env`):
 
 ```toml
 [library]
@@ -89,13 +89,13 @@ public_addr  = "127.0.0.1:8081" # exposed with `tailscale funnel 8081`
 
 ## Development
 
-Requires Rust (stable), libvips and ffmpeg.
+Built, run and tested in Docker, on the same Debian and libvips as the NAS.
+With a local `.env` pointing at a small library (see
+[development](docs/development.md)):
 
 ```sh
-brew install rustup vips ffmpeg   # macOS
-cp pellicule.example.toml pellicule.toml   # point root at ./samples
-cargo run -- scan
-cargo run -- serve
+docker compose up -d --build     # http://localhost:8080
+docker build --target test .     # fmt, clippy, tests
 ```
 
 ## License

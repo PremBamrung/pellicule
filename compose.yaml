@@ -11,8 +11,8 @@ services:
     volumes:
       - ${PHOTOS_DIR:?set PHOTOS_DIR in .env}:/photos:ro
       - ${CACHE_DIR:-./cache}:/cache
-      # Uncomment to override the bundled config:
-      # - ./pellicule.toml:/config/pellicule.toml:ro
+      # Config; set PELLICULE_TOML in .env to use another file.
+      - ${PELLICULE_TOML:-./docker/pellicule.toml}:/config/pellicule.toml:ro
     ports:
       # Full gallery: LAN and tailnet. No login: never port-forward it.
       # Tailnet only: "<nas tailnet IP>:${PRIVATE_PORT:-8080}:8080".

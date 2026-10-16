@@ -19,7 +19,7 @@ Multi-stage `Dockerfile`:
 |---|---|---|
 | `/photos` | Library | host folder, **read-only** |
 | `/cache` | Previews, videos, SQLite | host folder (SSD preferred), writable by `PUID` |
-| `/config/pellicule.toml` | Config | bundled; optionally bind-mount your own |
+| `/config/pellicule.toml` | Config | `docker/pellicule.toml`, or the file named by `PELLICULE_TOML` in `.env` |
 
 ## On the NAS
 
@@ -101,17 +101,8 @@ the host must be able to use it (`group_add` with the host's `render` GID).
 
 ## Local development
 
-```sh
-brew install rustup vips ffmpeg
-cp pellicule.example.toml pellicule.toml   # root = "./samples", cache = "./cache"
-cargo run -- scan
-cargo run -- serve
-```
-
-Or test the container on the Mac against the samples:
-
-```sh
-PHOTOS_DIR=./samples docker compose up --build
-```
+The same `compose.yaml` runs on the Mac, with a git-ignored `.env` pointing
+at a small library and binding the private port to loopback; see
+[development](development.md).
 
 `samples/` and `cache/` are git- and docker-ignored.

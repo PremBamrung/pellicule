@@ -1,6 +1,7 @@
 /target
 /cache
 /pellicule.toml
+/pellicule.docker.toml
 .DS_Store
 /samples*
 /.env
