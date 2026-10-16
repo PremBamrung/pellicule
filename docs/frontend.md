@@ -51,8 +51,8 @@ No JS virtualization below ~2k items: native `loading="lazy"` plus
 
 ## Home and album cards
 
-The home page opens on rows of whole, uncropped photos picked at random,
-taking turns (a row narrower than the page is centred). A hairline and an
+The home page opens on rows of whole, uncropped photos, one random album
+per row, taking turns (a row narrower than the page is centred). A hairline and an
 **Albums** heading, with the library stats on the same line, close the photos
 and open the albums.
 
@@ -144,14 +144,19 @@ lazily when the viewer opens.
 
 ## Pages
 
-- **Home** — opens on a row of whole photographs, never cropped: 16 random
-  photos (portraits too) are split into rows of one height (about half the
-  screen, less on phones) that fill the page width, each row the combination
-  closest to that height. The frame keeps one height, so nothing below moves
-  when the next row crossfades in every 8 s; dots pick a row. It pauses on
-  hover, focus and in background tabs, and doesn't move with reduced motion.
-  The album and date of the photo pointed at show under the row; a photo
-  opens the viewer on it in its album (`/a/<album>#p=<key>`). Then a line of
+- **Home** — opens on a row of whole photographs, never cropped, one album
+  per row: up to six random top-level albums (sub-albums included), each
+  offering eight candidates, one random photo from each eighth of its
+  timeline. Each row is the 3–5 of them, in time order, that fill the page
+  width at one height (about half the screen, less on phones); an album
+  that fits badly is left out, unless it is the first. A single album gets
+  a row per third of its timeline; without albums, the photos at the root
+  make the rows. The frame keeps one height, so nothing below moves when the
+  next row crossfades in every 8 s; dots (named after their album) pick a
+  row. It pauses on hover, focus and in background tabs, and doesn't move
+  with reduced motion. Under the row: its album and dates ("Japon ·
+  6–7 Oct 2023"), or the date of the photo pointed at; a photo opens the
+  viewer on it in its album (`/a/<album>#p=<key>`). Then a line of
   library stats ("2 albums, 200 photographs, 2023–2025") and the album
   covers, most recent first.
 - **Album** — the title, a summary, then the album bar: filters on the left,

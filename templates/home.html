@@ -3,13 +3,15 @@
 {% block content %}
 {% if !heroes.is_empty() %}
 <figure class="hero">
-  {# app.js splits the photos into rows that fill the width and crossfades
-     between them; without it the first few simply show. #}
+  {# Candidates for a few rows, one album each, in time order: app.js keeps
+     the photos of each row that fill the width and crossfades between the
+     rows; without it the first few simply show. #}
   <div class="hero-frame">
     {% for hero in heroes %}
     <a class="hero-photo ph" href="{{ hero.href }}" aria-label="{{ hero.label }}"
        style="--ar: {{ hero.tile.aspect }}; background-color: {{ hero.tile.background }}" data-thumbhash="{{ hero.tile.thumbhash }}"
-       data-album="{{ hero.album_title }}" data-album-href="{{ hero.album_href }}" data-date="{{ hero.tile.label_date }}">
+       data-row="{{ hero.row }}" data-album="{{ hero.album_title }}" data-album-href="{{ hero.album_href }}"
+       data-album-dates="{{ hero.album_dates }}" data-date="{{ hero.tile.label_date }}">
       {% if loop.index0 < 4 %}
       <img src="{{ hero.tile.view_url }}" srcset="{{ hero.tile.wide_srcset }}" sizes="50vw"
            width="{{ hero.tile.zoom_width }}" height="{{ hero.tile.zoom_height }}"

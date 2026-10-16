@@ -149,6 +149,20 @@ try {
     await sleep(9000);
     check("home rows crossfade", await ev(`document.querySelectorAll(".hero-row")[1].classList.contains("is-current")`));
   }
+  // One album per row, named with its dates under the row.
+  check(
+    "each home row is one album",
+    await ev(`[...document.querySelectorAll(".hero-row")].every((row) =>
+      new Set([...row.querySelectorAll(".hero-photo")].map((p) => p.dataset.album)).size === 1)`),
+  );
+  check(
+    "caption names the row's album and dates",
+    await ev(`(() => {
+      const first = document.querySelector(".hero-row.is-current .hero-photo");
+      const [link, date] = document.querySelector(".hero-label").children;
+      return link.textContent === first.dataset.album && date.textContent === first.dataset.albumDates;
+    })()`),
+  );
   await ev(`document.querySelector(".hero-row.is-current .hero-photo").dispatchEvent(new PointerEvent("pointerover", { bubbles: true }))`);
   check(
     "caption names the photo pointed at",

@@ -64,6 +64,10 @@ X-T3/X-E3 JPEGs) and is ready to be tried on the NAS with Docker Compose.
 - Viewer: film simulation on the label; **Recipe** button / `r` (panel on
   desktop, bottom sheet on phones). Albums: a **Film** filter menu.
 
+### Frontend pass 8
+- Home rows: one random album per row, photos spread through its timeline
+  in time order; the caption always names the row's album and dates.
+
 ### Frontend pass 7
 - Album grid with air: 16 px between photos (8 px on phones, the home rows
   too); rows between about 0.85x and 1.2x the target height instead of 1x

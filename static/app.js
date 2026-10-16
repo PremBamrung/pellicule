@@ -45,7 +45,7 @@ for (const element of document.querySelectorAll(".ph")) {
   }
 }
 
-// ---- home: rows of whole photos, taking turns ------------------------------
+// ---- home: rows of whole photos, one album each, taking turns -----------
 
 const hero = document.querySelector(".hero");
 if (hero) {
@@ -53,7 +53,11 @@ if (hero) {
   const pool = [...frame.querySelectorAll(".hero-photo")].map((element) => ({
     element,
     ar: parseFloat(element.style.getPropertyValue("--ar")) || 1.5,
+    row: element.dataset.row ?? "0",
   }));
+  // The server's candidates per row (one album each), in time order.
+  const candidates = new Map();
+  for (const photo of pool) candidates.set(photo.row, [...(candidates.get(photo.row) ?? []), photo]);
   const label = hero.querySelector(".hero-label");
   const dotsBox = hero.querySelector(".hero-dots");
   const still = matchMedia("(prefers-reduced-motion: reduce)");
@@ -76,10 +80,11 @@ if (hero) {
       }),
     );
 
-  // Rows of whole photos at one height, close to the target: the order is
-  // random anyway, so each row is the combination of the remaining photos
-  // (up to five) that fills the width at the height nearest the target. A
-  // row that would be too tall is held at the target and left narrower.
+  // Rows of whole photos at one height, close to the target: each row is
+  // the combination of its candidates (up to five, in time order) that
+  // fills the width at the height nearest the target. A row that would be
+  // too tall is held at the target and left narrower; one that fits badly
+  // is left out, unless it is the first.
   const split = () => {
     const width = frame.clientWidth;
     const target = Math.min(innerHeight * 0.55, width * 0.75);
@@ -92,8 +97,7 @@ if (hero) {
     };
 
     const groups = [];
-    let left = [...pool];
-    while (left.length && groups.length < 6) {
+    for (const photos of candidates.values()) {
       let best = null;
       const search = (from, items, ratio) => {
         if (items.length) {
@@ -102,19 +106,16 @@ if (hero) {
           // More photos only make the row lower.
           if (items.length === 5 || fit(items.length, ratio) < target) return;
         }
-        for (let i = from; i < left.length; i++) {
-          items.push(left[i]);
-          search(i + 1, items, ratio + left[i].ar);
+        for (let i = from; i < photos.length; i++) {
+          items.push(photos[i]);
+          search(i + 1, items, ratio + photos[i].ar);
           items.pop();
         }
       };
       search(0, [], 0);
-      // Keep going while rows fit well; the first one is always shown.
-      if (groups.length && best.cost > 0.12) break;
-      // In their random order, not the search's.
-      const items = left.filter((photo) => best.items.includes(photo));
-      groups.push({ items, height: Math.min(target, fit(items.length, best.items.reduce((sum, p) => sum + p.ar, 0))) });
-      left = left.filter((photo) => !best.items.includes(photo));
+      if (groups.length && best.cost > 0.12) continue;
+      const items = best.items;
+      groups.push({ items, height: Math.min(target, fit(items.length, items.reduce((sum, p) => sum + p.ar, 0))) });
     }
     return groups;
   };
@@ -134,7 +135,7 @@ if (hero) {
         element.append(photo);
       }
       frame.append(element);
-      return { element };
+      return { element, first: items[0].element };
     });
     frame.style.height = `${Math.round(Math.max(...groups.map((g) => g.height)))}px`;
 
@@ -142,7 +143,7 @@ if (hero) {
       ...rows.map((_, i) => {
         const dot = document.createElement("button");
         dot.type = "button";
-        dot.setAttribute("aria-label", `Photos ${i + 1} of ${rows.length}`);
+        dot.setAttribute("aria-label", `${rows[i].first.dataset.album}, photos ${i + 1} of ${rows.length}`);
         dot.addEventListener("click", async () => {
           await load(rows[i]);
           show(i);
@@ -165,16 +166,18 @@ if (hero) {
       }
     });
     [...dotsBox.children].forEach((dot, i) => dot.setAttribute("aria-current", String(i === index)));
-    caption(null);
     current = index;
+    caption(null);
   };
 
-  // Under the row: the album and date of the photo pointed at or focused.
+  // Under the row: its album and dates, or the date of the photo pointed
+  // at or focused.
   const caption = (photo) => {
     const [link, date] = label.children;
-    link.textContent = photo?.dataset.album ?? "";
-    link.href = photo?.dataset.albumHref ?? "";
-    date.textContent = photo?.dataset.date ?? "";
+    const shown = photo ?? rows[current]?.first;
+    link.textContent = shown?.dataset.album ?? "";
+    link.href = shown?.dataset.albumHref ?? "";
+    date.textContent = (photo ? photo.dataset.date : shown?.dataset.albumDates) ?? "";
   };
   frame.addEventListener("pointerover", (event) => caption(event.target.closest(".hero-photo")));
   frame.addEventListener("focusin", (event) => caption(event.target.closest(".hero-photo")));

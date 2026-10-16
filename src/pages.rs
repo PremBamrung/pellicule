@@ -38,10 +38,17 @@ pub struct Hero {
     pub album_title: String,
     /// "Japon, 6 October 2023, 12:24", for screen readers.
     pub label: String,
+    /// The row it is a candidate for: one album per row.
+    pub row: usize,
+    /// "6–7 Oct 2023": the album's dates, under its row.
+    pub album_dates: String,
 }
 
-/// Enough for a few rows of 3–4 photos on a wide screen (app.js).
-const HERO_COUNT: usize = 16;
+/// Rows the home photos take turns in.
+const HERO_ROWS: usize = 6;
+/// Candidates per row, one from each slice of the album's timeline: enough
+/// for app.js to find 3–5 that fill a wide screen.
+const HERO_PICKS: usize = 8;
 
 #[derive(Template)]
 #[template(path = "album.html")]
@@ -183,34 +190,84 @@ pub fn home<'a>(conn: &Connection, layout: &'a Layout) -> Result<HomePage<'a>> {
     })
 }
 
-/// Random photos from the whole library, new on every visit. They are
-/// shown whole, so portraits are as welcome as landscapes.
+/// The home rows, new on every visit: each row is one random top-level
+/// album (sub-albums included), its candidates one random photo from each
+/// eighth of its timeline, in time order; app.js keeps the few that fill
+/// the width. A single album gets a row per third of its timeline; without
+/// albums, the photos at the library root make the rows.
 fn heroes(conn: &Connection) -> Result<Vec<Hero>> {
-    let mut stmt = conn.prepare(&format!(
-        "SELECT {MEDIA_COLUMNS}, a.rel_path, a.name
-         FROM media m JOIN album a ON a.id = m.album_id
-         WHERE {VISIBLE}
-         ORDER BY random() LIMIT {HERO_COUNT}"
-    ))?;
-    let heroes = stmt
-        .query_map([], |r| {
-            let rel_path: String = r.get(17)?;
-            let tile = tile_from_row(r)?;
-            let album_href = if rel_path.is_empty() {
-                "/".into()
-            } else {
-                album_href(&rel_path)
-            };
-            let album_title: String = r.get(18)?;
-            Ok(Hero {
-                href: format!("{album_href}#p={}", tile.key),
-                label: format!("{album_title}, {}", tile.accessible_name),
-                tile,
-                album_href,
-                album_title,
+    let Some(root) = album_by_path(conn, "")? else {
+        return Ok(Vec::new());
+    };
+    let mut stmt = conn.prepare(
+        "SELECT id, rel_path, name FROM album
+         WHERE parent_id = ?1 AND missing_since IS NULL ORDER BY random()",
+    )?;
+    let mut albums: Vec<AlbumRow> = stmt
+        .query_map(params![root.id], |r| {
+            Ok(AlbumRow {
+                id: r.get(0)?,
+                rel_path: r.get(1)?,
+                name: r.get(2)?,
             })
         })?
         .collect::<rusqlite::Result<_>>()?;
+    if albums.is_empty() {
+        albums.push(root);
+    }
+
+    let mut picked = Vec::new();
+    for album in albums {
+        if picked.len() == HERO_ROWS {
+            break;
+        }
+        let (count, first, last) = album_stats(conn, &album.rel_path)?;
+        if count > 0 {
+            picked.push((album, day_span(first.as_deref(), last.as_deref())));
+        }
+    }
+    let parts = if picked.len() == 1 { 3 } else { 1 };
+
+    let mut heroes = Vec::new();
+    for (index, (album, dates)) in picked.into_iter().enumerate() {
+        let slices = parts * HERO_PICKS;
+        let mut stmt = conn.prepare(&format!(
+            "WITH sliced AS (
+                 SELECT m.id, ntile({slices}) OVER (
+                     ORDER BY m.taken_at IS NULL, m.taken_at, a.rel_path, m.file_name
+                 ) AS slice
+                 FROM media m JOIN album a ON a.id = m.album_id WHERE {IN_SUBTREE}
+             ),
+             picked AS (
+                 SELECT id, slice, row_number() OVER (PARTITION BY slice ORDER BY random()) AS pick
+                 FROM sliced
+             )
+             SELECT {MEDIA_COLUMNS}, p.slice FROM picked p JOIN media m ON m.id = p.id
+             WHERE p.pick = 1 ORDER BY p.slice"
+        ))?;
+        let album_href = if album.rel_path.is_empty() {
+            "/".to_string()
+        } else {
+            album_href(&album.rel_path)
+        };
+        let photos: Vec<(Tile, i64)> = stmt
+            .query_map(params![album.rel_path], |r| {
+                Ok((tile_from_row(r)?, r.get(17)?))
+            })?
+            .collect::<rusqlite::Result<_>>()?;
+        for (tile, slice) in photos {
+            let slice = usize::try_from(slice - 1).unwrap_or(0);
+            heroes.push(Hero {
+                href: format!("{album_href}#p={}", tile.key),
+                label: format!("{}, {}", album.name, tile.accessible_name),
+                row: index * parts + slice / HERO_PICKS,
+                album_dates: dates.clone().unwrap_or_default(),
+                album_href: album_href.clone(),
+                album_title: album.name.clone(),
+                tile,
+            });
+        }
+    }
     Ok(heroes)
 }
 
