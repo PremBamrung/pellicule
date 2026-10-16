@@ -362,10 +362,13 @@ if (photos) {
     ["Space", "Slideshow"],
     ["F", "Fullscreen"],
     ["I", "Show or hide the label"],
+    ["R", "Fujifilm recipe"],
     ["?", "This list"],
     ["Esc", "Close"],
   ];
   let labelHidden = false;
+  // The recipe stays open from photo to photo until it is closed.
+  let recipeOpen = false;
   const PLAY = '<svg aria-hidden="true" viewBox="0 0 32 32" width="32" height="32"><path d="M11 9l12 7-12 7z"/></svg>';
   const PAUSE = '<svg aria-hidden="true" viewBox="0 0 32 32" width="32" height="32"><path d="M10 9h4v14h-4zM18 9h4v14h-4z"/></svg>';
   const ENTER_FULL = '<svg aria-hidden="true" viewBox="0 0 32 32" width="32" height="32"><path d="M9 14V9h5M18 9h5v5M23 18v5h-5M14 23H9v-5"/></svg>';
@@ -387,7 +390,7 @@ if (photos) {
         pswp.on("change", () => {
           const data = pswp.currSlide.data.element?.dataset ?? {};
           date.textContent = data.date ?? "";
-          gear.textContent = data.gear ?? "";
+          gear.textContent = [data.gear, data.fFilm].filter(Boolean).join(" · ");
           exposure.textContent = data.exposure ?? "";
         });
         // "i" shows or hides the label.
@@ -466,6 +469,67 @@ if (photos) {
       });
     }
 
+    // Fujifilm recipe: the button or "r" opens it beside the photo (a sheet
+    // at the bottom on phones). Photos without one have no button.
+    const recipe = document.createElement("aside");
+    recipe.className = "pswp__recipe";
+    recipe.id = "pswp-recipe";
+    recipe.hidden = true;
+    recipe.setAttribute("aria-label", "Fujifilm recipe");
+    let recipeButton = null;
+    const recipeOf = () => pswp.currSlide?.data.element?.dataset ?? {};
+    const renderRecipe = () => {
+      const data = recipeOf();
+      const rows = (data.recipe ?? "")
+        .split("\n")
+        .map((row) => row.split("\t"))
+        .filter((row) => row.length === 2);
+      recipeButton.hidden = !rows.length;
+      recipe.hidden = !(recipeOpen && rows.length);
+      recipeButton.setAttribute("aria-expanded", String(!recipe.hidden));
+      if (recipe.hidden) return;
+      const title = document.createElement("p");
+      title.className = "pswp__recipe-film";
+      title.textContent = data.fFilm || "Recipe";
+      const list = document.createElement("dl");
+      for (const [label, value] of rows) {
+        const dt = document.createElement("dt");
+        const dd = document.createElement("dd");
+        dt.textContent = label;
+        dd.textContent = value;
+        list.append(dt, dd);
+      }
+      recipe.replaceChildren(title, list);
+    };
+    const toggleRecipe = (open = !recipeOpen) => {
+      recipeOpen = open;
+      renderRecipe();
+    };
+    pswp.ui.registerElement({
+      name: "recipe",
+      // After the preloader (7), which pushes what follows to the right.
+      order: 7.5,
+      isButton: true,
+      title: "Fujifilm recipe (r)",
+      html: "Recipe",
+      onInit: (button) => {
+        recipeButton = button;
+        button.setAttribute("aria-controls", recipe.id);
+        button.addEventListener("click", () => toggleRecipe());
+        pswp.element.append(recipe);
+        pswp.on("change", renderRecipe);
+        pswp.on("keydown", (event) => {
+          const { key, metaKey, ctrlKey, altKey } = event.originalEvent;
+          if (key === "r" && !metaKey && !ctrlKey && !altKey && !recipeButton.hidden) toggleRecipe();
+          else if (key === "Escape" && !recipe.hidden) {
+            // Esc first closes the recipe, then the viewer.
+            event.preventDefault();
+            toggleRecipe(false);
+          }
+        });
+      },
+    });
+
     // Keyboard shortcuts: "?" or its button (only shown once a mouse is
     // used, like the arrows) lists them.
     const panel = document.createElement("div");
@@ -482,7 +546,7 @@ if (photos) {
     let helpButton = null;
     pswp.ui.registerElement({
       name: "help",
-      order: 7,
+      order: 7.6,
       isButton: true,
       title: "Keyboard shortcuts (?)",
       html: '<svg aria-hidden="true" viewBox="0 0 32 32" width="32" height="32"><text x="16" y="22" text-anchor="middle">?</text></svg>',

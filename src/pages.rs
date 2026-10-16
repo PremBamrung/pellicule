@@ -162,6 +162,10 @@ pub struct Tile {
     pub camera: String,
     pub lens: String,
     pub focal: &'static str,
+    /// Fujifilm film simulation (filter value and label); empty otherwise.
+    pub film: String,
+    /// Fujifilm recipe rows, `label\tvalue` per line; empty otherwise.
+    pub recipe: String,
 }
 
 struct AlbumRow {
@@ -196,14 +200,14 @@ fn heroes(conn: &Connection) -> Result<Vec<Hero>> {
     ))?;
     let heroes = stmt
         .query_map([], |r| {
-            let rel_path: String = r.get(15)?;
+            let rel_path: String = r.get(17)?;
             let tile = tile_from_row(r)?;
             let album_href = if rel_path.is_empty() {
                 "/".into()
             } else {
                 album_href(&rel_path)
             };
-            let album_title: String = r.get(16)?;
+            let album_title: String = r.get(18)?;
             Ok(Hero {
                 href: format!("{album_href}#p={}", tile.key),
                 label: format!("{album_title}, {}", tile.accessible_name),
@@ -546,7 +550,7 @@ fn spread(len: usize, count: usize) -> impl Iterator<Item = usize> {
 
 const MEDIA_COLUMNS: &str = "m.content_key, m.width, m.height, m.avg_rgb, m.make, m.model, m.lens,
      m.focal_mm, m.focal_35mm, m.aperture, m.exposure_s, m.iso, m.exposure_bias, m.taken_at,
-     m.thumbhash";
+     m.thumbhash, m.film_sim, m.fuji_recipe";
 
 fn tiles(conn: &Connection, album_id: i64) -> Result<Vec<Tile>> {
     let mut stmt = conn.prepare(&format!(
@@ -577,6 +581,8 @@ fn tile_from_row(row: &Row) -> rusqlite::Result<Tile> {
     let bias: Option<f64> = row.get(12)?;
     let taken_at: Option<String> = row.get(13)?;
     let thumbhash: Option<Vec<u8>> = row.get(14)?;
+    let film: Option<String> = row.get(15)?;
+    let recipe: Option<String> = row.get(16)?;
 
     let url = |v: Variant| format!("/d/{}", derive::file_name(&key, v));
     let dims = |v: Variant| derive::fit(width, height, v);
@@ -649,6 +655,8 @@ fn tile_from_row(row: &Row) -> rusqlite::Result<Tile> {
         focal: focal_mm
             .map(|mm| focal_range(focal_35mm.map_or(mm, |eq| eq as f64)).0)
             .unwrap_or(""),
+        film: film.unwrap_or_default(),
+        recipe: recipe.unwrap_or_default(),
     })
 }
 
@@ -669,9 +677,9 @@ fn focal_range(equivalent_mm: f64) -> (&'static str, &'static str) {
         .expect("last range is unbounded")
 }
 
-/// The same four menus on every album with photos, in the same order. One
+/// The same five menus on every album with photos, in the same order. One
 /// with a single value shows it (as information, not a choice); one with
-/// none says so.
+/// none says so (Film on an album without Fujifilm photos).
 fn filters(tiles: &[Tile]) -> Vec<FilterGroup> {
     if tiles.is_empty() {
         return Vec::new();
@@ -756,6 +764,11 @@ fn filters(tiles: &[Tile]) -> Vec<FilterGroup> {
             key: "focal",
             label: "Focal length",
             options: focal,
+        },
+        FilterGroup {
+            key: "film",
+            label: "Film",
+            options: plain(counted(tiles.iter().map(|t| t.film.as_str()))),
         },
     ]
     .into()

@@ -11,7 +11,7 @@ signature feature.
 | Part | How |
 |---|---|
 | Standard EXIF (JPEG, HEIC) + video dates (MOV/MP4) | [`nom-exif`](https://crates.io/crates/nom-exif) (MIT) |
-| Fujifilm MakerNote | Our own parser (`src/meta/fuji.rs`), fed the raw bytes of tag `0x927C` |
+| Fujifilm MakerNote | Our own parser (`src/meta/fuji.rs`), fed the raw bytes of tag `0x927C`, only when `Make` is FUJIFILM |
 | Canon | Standard EXIF only (Canon writes `LensModel` there). Picture Style (Canon MakerNote) maybe later |
 
 Tag IDs and value meanings below come from exiftool's `FujiFilm.pm` tables —
@@ -21,9 +21,18 @@ Tag IDs and value meanings below come from exiftool's `FujiFilm.pm` tables —
 
 `make`, `model`, `lens`, `focal_mm`, `focal_35mm`, `aperture`, `exposure_s`,
 `iso`, `exposure_bias`, `taken_at` + `tz_offset` (from `OffsetTimeOriginal`),
-`rating`, `gps_lat`/`gps_lon` (private side only), plus `film_sim` (indexed) and
-`fuji_recipe` (JSON). A `makernote_version` column lets us re-parse when the
-parser improves.
+plus `film_sim` (indexed) and `fuji_recipe`. *Planned:* `rating`,
+`gps_lat`/`gps_lon` (private side only).
+
+`fuji_recipe` holds the recipe as display rows, one `label<TAB>value` line
+each (`Shadow` and `−2`), which the viewer shows as they are; the film simulation
+is its own column so it can be filtered on. `meta_version` records which
+version of the reader (`META_VERSION` in `src/meta.rs`) filled a row: after
+a bump, the next scan re-reads the metadata of every photo without touching
+the derivatives (506 photos in a third of a second on the Mac).
+
+Photos from other makes (the Canon EOS 600D) simply have no film simulation
+and no recipe: nothing is guessed and nothing empty is shown.
 
 **Capture date chain**: `SubSecDateTimeOriginal` / `DateTimeOriginal` +
 `OffsetTimeOriginal` → QuickTime `CreationDate` (videos) → filename pattern →
@@ -87,10 +96,10 @@ Unknown values are shown as `Unknown (0x…)` rather than guessed.
 | DR setting | 0x1402 | 0x000 Auto · 0x001 Manual · 0x100 Standard · 0x200 Wide1 · 0x201 Wide2 |
 | DR value (manual) | 0x1403 | 100 / 200 / 400 → DR100 / DR200 / DR400 |
 | DR value (auto) | 0x140B | percentage → "DR-Auto (200%)" |
-| D-Range Priority | 0x1443 / 0x1444 / 0x1445 | Auto/Fixed; Weak · Strong (· Plus) → shown instead of DR |
-| White balance | 0x1002 | 0x0 Auto · 0x1 Auto White Priority · 0x2 Auto Ambience · 0x100 Daylight · 0x200 Shade · 0x30x Fluorescent · 0x400 Incandescent · 0x600 Underwater · 0xF00–F04 Custom · 0xFF0 Kelvin |
+| D-Range Priority | 0x1443 / 0x1444 / 0x1445 | Auto/Fixed; Weak · Strong (· Plus). **Not decoded yet**: none of our bodies has it, so it can't be verified |
+| White balance | 0x1002 | 0x0 Auto · 0x1 Auto White Priority · 0x2 Auto Ambience · 0x100 Daylight · 0x200 Shade · 0x300–0x304 Fluorescent (daylight, day white, white, warm white, living room) · 0x400 Incandescent · 0x500 Flash · 0x600 Underwater · 0xF00–F04 Custom · 0xFF0 Kelvin |
 | Colour temperature | 0x1005 | Kelvin, when WB = 0xFF0 |
-| WB shift | 0x100A | (R, B) as i32; **newer bodies store ×20** (40, −80 → R+2 B−4) |
+| WB shift | 0x100A | (R, B) as i32; **newer bodies store ×20** (40, −80 → R+2 B−4; the X-T3 and X-E3 do). Values that aren't multiples of 20 are taken as steps. exiftool prints them unscaled |
 | Highlight tone | 0x1041 | display = −raw / 16 (−32 → +2; half steps fall out) |
 | Shadow tone | 0x1040 | same as highlight |
 | Color | 0x1003 | 0x000 0 · 0x080 +1 · 0x100 +2 · 0x0C0 +3 · 0x0E0 +4 · 0x180 −1 · 0x400 −2 · 0x4C0 −3 · 0x4E0 −4 |
@@ -98,51 +107,72 @@ Unknown values are shown as `Unknown (0x…)` rather than guessed.
 | High ISO NR | 0x100E | 0x000 0 · 0x180 +1 · 0x100 +2 · 0x1C0 +3 · 0x1E0 +4 · 0x280 −1 · 0x200 −2 · 0x2C0 −3 · 0x2E0 −4 |
 | Clarity | 0x100F | raw / 1000 |
 | Monochromatic colour WC / MG | 0x1049 / 0x104B | i8: + warm / − cool; + green / − magenta |
-| Re-developed from RAW | 0x1436 | 1 → badge (recipe reflects the in-camera RAW conversion) |
-| In-camera rating | 0x1431 | 0–5, a cover / sort hint |
+| Re-developed from RAW | 0x1436 | 1 → "Developed: In camera, from RAW" (the recipe reflects the in-camera RAW conversion) |
+| In-camera rating | 0x1431 | 0–5, a cover / sort hint *(not read yet)* |
 
 Not decoded by exiftool either (so not shown): Smooth Skin Effect, newer Tone
 Curve UI details. We show what is known and don't invent tags.
 
 ## Testing
 
-Golden tests: run `exiftool -j -G1 -n -FujiFilm:all` once on 20–30 sample JPEGs
-from **each body we own**, commit the JSON next to small fixture files, and diff
-our parser against it in CI. exiftool is only a test oracle, never a runtime
-dependency. The WB-shift ÷20 rule and the Adobe RGB `R03` detection are
-confirmed this way.
+Golden tests on one photo per distinct recipe in the library (four X-T3,
+two X-E3: Classic Chrome, Acros + R, Astia; Daylight, Custom and Kelvin
+white balance; manual and auto DR). `scripts/make-fuji-fixtures.sh` (run in
+the Docker `test` image, see [development](development.md)) saves for each
+one only the **MakerNote bytes** (about 1 KB, no image) with the camera's
+internal serial number zeroed, and exiftool's raw reading (`-n`) as JSON in
+`tests/fixtures/fuji/`.
+
+The tests check that the parser reads the same raw values as exiftool for
+every recipe tag, then the displayed wording against exiftool's printed
+values; plus every truncation and corrupted header byte of a real note
+(never a panic) and a non-Fujifilm note. exiftool is only a test oracle,
+never a runtime dependency. The WB-shift ÷20 rule is confirmed this way
+(every X-T3 / X-E3 value is a multiple of 20).
 
 ## Display
 
-**Caption line** (viewer, always visible, dimmed):
+**Museum label** (viewer; `i` hides it): the film simulation ends the gear
+line.
 
 ```
-X-T5 · XF23mmF1.4 R LM WR · 23mm (35mm eq.) · f/2 · 1/500s · ISO 160 · +⅓ EV · Classic Chrome
+6 October 2023, 12:22
+Fujifilm X-T3, XF16-80mmF4 R OIS WR · Acros + R
+17.1mm (26mm eq.), f/9, 1/350s, ISO 640, −⅔ EV
 ```
 
 - `f/2` not `f/2.0`; `1/500s` below a second, `2s` at or above.
 - 35 mm equivalent only when it differs from the focal length.
 - Exposure bias in thirds: `+⅓ EV`, `−1⅔ EV`, `±0 EV` hidden.
 
-**Recipe card** (`i` key or button; side panel on desktop, bottom sheet on mobile;
-typography only, small caps and tabular numbers):
+**Recipe** (the "Recipe" button or `r`; a panel beside the photo on
+desktop, a sheet at the bottom on phones; typography only, tabular numbers;
+it stays open from photo to photo until closed, Esc closes it first). Only
+the settings the camera recorded are listed, in this order:
 
 ```
-CLASSIC CHROME
-Grain        Weak · Small        Color Chrome   Strong
-CC FX Blue   Weak                Dynamic Range  DR400
-White Bal.   Auto  R+2 B−4       Highlight      −1
-Shadow       +1                  Color          +2
-Sharpness    −1                  High ISO NR    −4
-Clarity      0
+Classic Chrome
+Grain            Off
+Colour chrome    Strong
+Dynamic range    DR400
+White balance    Daylight · R+3 B−5
+Highlight        −1
+Shadow           −2
+Colour           +3          (Toning WC / MG instead, for monochrome)
+Sharpness        +1
+Noise reduction  −1
 ```
+
+Grain size, Colour chrome blue and Clarity appear on bodies that record
+them (not the X-T3 / X-E3). No film decoration: the photos and the words do
+the work.
 
 Recipe data is rendered inline in the page (≈300 bytes per photo), so opening
 the card needs no request over Funnel.
 
-**Film simulation as a facet** (later): a small chip on grid hover,
-`/film/classic-chrome` pages across albums, and an album summary such as
-"Mostly Classic Neg. · 3 Acros".
+**Film simulation as a facet**: a **Film** menu on every album, after Focal
+length (see [frontend](frontend.md)). Later: `/film/classic-chrome` pages
+across albums, and an album summary such as "Mostly Classic Neg. · 3 Acros".
 
 ## Privacy
 

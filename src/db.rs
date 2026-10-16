@@ -72,6 +72,14 @@ const MIGRATIONS: &[&str] = &[
     -- previews): comparable across machines and worker counts.
     ALTER TABLE scan_run ADD COLUMN photo_ms INTEGER;
 "#,
+    r#"
+    -- Fujifilm recipe (src/meta/fuji.rs) and the version of the metadata
+    -- reader: older rows get their metadata re-read on the next scan.
+    ALTER TABLE media ADD COLUMN film_sim TEXT;
+    ALTER TABLE media ADD COLUMN fuji_recipe TEXT;   -- `label\tvalue` lines
+    ALTER TABLE media ADD COLUMN meta_version INTEGER;
+    CREATE INDEX media_film ON media(film_sim);
+"#,
 ];
 
 pub fn open(cache_dir: &Path) -> Result<Connection> {

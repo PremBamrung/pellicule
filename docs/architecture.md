@@ -23,7 +23,7 @@ a cache, and **serve** that cache over two HTTP listeners.
 | `config` | Load `pellicule.toml` (library root, cache dir, listener addresses). |
 | `library` | Conventions: media detection, ignore rules, album discovery. |
 | `scan` | Walk the tree, diff against SQLite by (path, size, mtime), process changes in parallel. |
-| `meta` | Standard EXIF via `nom-exif` and its formatting; Fujifilm MakerNote *(M4)*; `index.md` *(later)*. |
+| `meta` | Standard EXIF via `nom-exif` and its formatting; Fujifilm MakerNote recipe (`meta/fuji.rs`); `index.md` *(later)*. |
 | `derive` | libvips variants + ThumbHash, content keys; ffmpeg posters and previews *(M5)*. |
 | `db` | SQLite (single file in cache dir) with embedded migrations. |
 | `pages` | Page queries and view models for the templates. |

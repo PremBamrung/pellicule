@@ -72,10 +72,12 @@ plain card.
 
 ## Filters
 
-Every album with photos has the same four menus, in the same order: **Day**,
-**Camera**, **Lens** and **Focal length**. A menu with a single value still
-opens and shows it, with its count, as information (its checkbox is disabled:
-ticking it would change nothing); one with no value says "Not recorded".
+Every album with photos has the same five menus, in the same order: **Day**,
+**Camera**, **Lens**, **Focal length** and **Film** (the Fujifilm film
+simulation). A menu with a single value still opens and shows it, with its
+count, as information (its checkbox is disabled: ticking it would change
+nothing); one with no value says "Not recorded" (Film on an album without
+Fujifilm photos).
 
 - Days read like "Sat 7 Oct" (with the year when the album spans several).
 - Focal length uses 35mm-equivalent ranges, since zooms record values like
@@ -128,8 +130,9 @@ lazily when the viewer opens.
    derivative; originals only on explicit zoom or download.
 5. **Color is accurate.** Derivatives are colour-managed: sRGB stays sRGB,
    wide-gamut sources keep a Display-P3 profile (see [cache.md](cache.md)).
-6. **Keyboard and touch are first-class.** ←/→, Esc, `i` for info, space for
-   the slideshow, `f` for fullscreen, `?` for the list of keys, swipe, pinch.
+6. **Keyboard and touch are first-class.** ←/→, Esc, `i` for info, `r` for
+   the recipe, space for the slideshow, `f` for fullscreen, `?` for the list
+   of keys, swipe, pinch.
    Every photo link is named (its date) for screen readers.
 
 ## Pages
@@ -154,7 +157,10 @@ lazily when the viewer opens.
   **slideshow** via the play button or the space bar (4 s per photo);
   **fullscreen** via its button or `f` (not on iPhone, where pages can't go
   fullscreen; closing the viewer leaves it); `i` hides the label; `?` or its
-  button (shown once a mouse is used) lists the keys.
+  button (shown once a mouse is used) lists the keys; on Fujifilm photos the
+  film simulation ends the label's gear line, and the **Recipe** button or
+  `r` shows the in-camera recipe beside the photo (a bottom sheet on
+  phones; see [exif.md](exif.md)).
 - **Library** — scans and their history (see [architecture](architecture.md)).
 
 ### Planned
@@ -176,6 +182,7 @@ Fujifilm X-T3, XF35mmF1.4 R
 35mm (53mm eq.), f/2, 1/210s, ISO 640, −1 EV
 ```
 
-Later (M4), `i` opens the **recipe card** (glass side panel on desktop, bottom sheet on
-mobile): film simulation, grain, colour chrome, dynamic range, WB shift,
-highlight/shadow tone… rendered inline, no extra request. See [exif.md](exif.md).
+The film simulation ends the gear line on Fujifilm photos ("… · Classic
+Chrome"); the **Recipe** button or `r` opens the full recipe beside the photo
+(a bottom sheet on phones), rendered from the page, no extra request. See
+[exif.md](exif.md).

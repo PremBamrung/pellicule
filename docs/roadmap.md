@@ -17,7 +17,7 @@ X-T3/X-E3 JPEGs) and is ready to be tried on the NAS with Docker Compose.
 | Library page | ✅ rescan / rebuild / cancel, live progress, history, failures |
 | Look | ✅ white by default + dark toggle, Geist, blur-up placeholders, transitions |
 | Docker | ✅ image + compose, verified end to end on the Mac; ⏳ not yet run on the NAS |
-| Fujifilm recipe | ⏳ next |
+| Fujifilm recipe | ✅ film simulation on the label, recipe panel, Film filter; ⏳ film on album cards |
 | Share links (Funnel) | ⏳ |
 | `index.md` / essays | ⏳ |
 | Video | ⏳ |
@@ -51,6 +51,22 @@ X-T3/X-E3 JPEGs) and is ready to be tried on the NAS with Docker Compose.
 ### Frontend pass 3
 - Home photos: six random photos crossfading, each linking to its place in
   the album (`/a/<album>#p=<key>`); replaced by rows of photos in pass 4.
+
+### M4 — Fujifilm recipe
+- MakerNote parser (`src/meta/fuji.rs`): film simulation, grain, colour
+  chrome, dynamic range, white balance and its shift, tone, colour,
+  sharpness, noise reduction, clarity; Fujifilm photos only.
+- Golden tests: MakerNote-only fixtures (serial zeroed) for every recipe in
+  the library, checked against exiftool; robustness against truncated and
+  corrupted notes.
+- `meta_version`: a reader change re-reads metadata on the next scan
+  without touching derivatives (506 photos in 0.34 s).
+- Viewer: film simulation on the label; **Recipe** button / `r` (panel on
+  desktop, bottom sheet on phones). Albums: a **Film** filter menu.
+
+### Docker workflow
+- Build, run and test in Docker on the NAS's Debian and libvips
+  (`docker build --target test .`); local `.env` for the Mac.
 
 ### Frontend pass 6
 - Album cards: cover and colour band only; the strip of four photos is gone,
@@ -102,11 +118,11 @@ X-T3/X-E3 JPEGs) and is ready to be tried on the NAS with Docker Compose.
   permissions and disk spin-down behaviour with the real library.
 - Filesystem watcher + nightly sweep (scans are manual or on start today).
 
-### M4 — Fujifilm recipe
-- Fujifilm MakerNote parser (film simulation, grain, colour chrome, DR, WB
-  shift, tone, clarity…) with golden tests against exiftool output.
-- Recipe card in the viewer (`i`), film simulation filter.
-- Film simulations on album cards ("Classic Chrome · Acros").
+### M4 — Fujifilm recipe (rest)
+- Film simulations on album cards ("Classic Chrome · Acros"), if the cards
+  stay calm with it.
+- D-Range Priority and the in-camera rating, once a body that records them
+  can be tested.
 
 ### M6 — Sharing (public listener)
 - Share tokens (password, expiry), managed from the Library page.

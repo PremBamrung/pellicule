@@ -97,6 +97,9 @@ the Fujifilm golden tests; run it from that image:
 ```sh
 docker build --target test -t pellicule:test .
 docker run --rm -v "$PWD":/work -w /work pellicule:test exiftool -j -G1 -n -FujiFilm:all <file>
+# regenerate tests/fixtures/fuji/ from the full samples
+docker run --rm -v "$PWD":/src -v "$PWD/samples":/photos:ro -w /src \
+  pellicule:test sh scripts/make-fuji-fixtures.sh
 ```
 
 `scripts/check-ui.mjs` drives the Mac's headless Chrome (no npm dependencies)
@@ -144,6 +147,7 @@ The derivative tests run the real pipeline on `tests/fixtures/` (made by
 | `src/scan.rs` | scan engine, progress / cancel (`ScanControl`), `scan_run` history |
 | `src/derive.rs` | libvips variants, content keys, ThumbHash |
 | `src/meta.rs` | EXIF extraction and formatting |
+| `src/meta/fuji.rs` | Fujifilm MakerNote recipe |
 | `src/db.rs` | SQLite open + migrations |
 | `src/pages.rs` | page queries and view models (filters, day sections, hero…) |
 | `src/server.rs` | listeners, routes, static assets, Library API |

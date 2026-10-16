@@ -1,9 +1,15 @@
-//! Standard EXIF extraction and photographer-friendly formatting.
-//! See docs/exif.md. The Fujifilm MakerNote recipe comes later (M4).
+//! Standard EXIF extraction, the Fujifilm recipe and photographer-friendly
+//! formatting. See docs/exif.md.
+
+pub mod fuji;
 
 use std::path::Path;
 
-use nom_exif::{ExifDateTime, ExifTag};
+use nom_exif::{EntryValue, ExifDateTime, ExifTag};
+
+/// Bump when what `read_exif` extracts changes: the next scan re-reads the
+/// metadata of every photo (derivatives are left alone).
+pub const META_VERSION: i64 = 1;
 
 #[derive(Debug, Default, Clone, PartialEq)]
 pub struct Exif {
@@ -19,6 +25,10 @@ pub struct Exif {
     /// Capture-local wall time, `YYYY-MM-DDTHH:MM:SS`.
     pub taken_at: Option<String>,
     pub tz_offset_min: Option<i32>,
+    /// Fujifilm film simulation ("Classic Chrome"); other makes have none.
+    pub film_sim: Option<String>,
+    /// Fujifilm recipe as display rows, `label\tvalue` per line.
+    pub recipe: Option<String>,
 }
 
 /// Missing or unreadable EXIF is not an error: the photo is still shown.
@@ -47,8 +57,18 @@ pub fn read_exif(path: &Path) -> Exif {
         None => (None, None),
     };
 
+    let make = text(ExifTag::Make);
+    // Only Fujifilm notes are decoded; other makes keep their MakerNote unread.
+    let recipe = make
+        .as_deref()
+        .filter(|m| m.to_ascii_uppercase().starts_with("FUJIFILM"))
+        .and_then(|_| match exif.get(ExifTag::MakerNote) {
+            Some(EntryValue::Undefined(bytes) | EntryValue::U8Array(bytes)) => fuji::parse(bytes),
+            _ => None,
+        });
+
     Exif {
-        make: text(ExifTag::Make),
+        make,
         model: text(ExifTag::Model),
         lens: text(ExifTag::LensModel),
         focal_mm: float(ExifTag::FocalLength).filter(|f| *f > 0.0),
@@ -59,7 +79,20 @@ pub fn read_exif(path: &Path) -> Exif {
         exposure_bias: float(ExifTag::ExposureBiasValue),
         taken_at,
         tz_offset_min,
+        film_sim: recipe.as_ref().and_then(|r| r.film.clone()),
+        recipe: recipe
+            .filter(|r| !r.settings.is_empty())
+            .map(|r| encode_recipe(&r.settings)),
     }
+}
+
+/// Recipe rows stored as `label\tvalue` lines (app.js splits them).
+pub fn encode_recipe(settings: &[(&str, String)]) -> String {
+    settings
+        .iter()
+        .map(|(label, value)| format!("{label}\t{value}"))
+        .collect::<Vec<_>>()
+        .join("\n")
 }
 
 /// `1/500s` below a second, `2s` / `1.3s` at or above.

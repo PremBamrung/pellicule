@@ -4,7 +4,8 @@
    data-pswp-srcset="{{ tile.zoom_srcset }}"
    data-date="{{ tile.label_date }}" data-gear="{{ tile.label_gear }}" data-exposure="{{ tile.label_exposure }}"
    data-thumbhash="{{ tile.thumbhash }}"
-   data-f-day="{{ tile.day }}" data-f-camera="{{ tile.camera }}" data-f-lens="{{ tile.lens }}" data-f-focal="{{ tile.focal }}">
+   data-f-day="{{ tile.day }}" data-f-camera="{{ tile.camera }}" data-f-lens="{{ tile.lens }}" data-f-focal="{{ tile.focal }}"
+   data-f-film="{{ tile.film }}"{% if !tile.recipe.is_empty() %} data-recipe="{{ tile.recipe }}"{% endif %}>
   <img src="{{ tile.thumb_url }}" srcset="{{ tile.thumb_srcset }}" sizes="{{ tile.sizes }}"
        width="{{ tile.thumb_width }}" height="{{ tile.thumb_height }}"
        {% if loop.index0 == 0 %}fetchpriority="high"{% endif %}

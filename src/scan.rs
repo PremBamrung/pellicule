@@ -16,7 +16,7 @@ use walkdir::WalkDir;
 use crate::config::Config;
 use crate::derive::{self, Derived, PIPELINE_VERSION};
 use crate::library::{self, MediaKind};
-use crate::meta::{self, Exif};
+use crate::meta::{self, Exif, META_VERSION};
 
 #[derive(Debug, Default)]
 pub struct ScanSummary {
@@ -37,12 +37,15 @@ struct Job {
     path: PathBuf,
     size: u64,
     mtime_ns: i64,
+    /// Unchanged file whose metadata was read by an older `META_VERSION`:
+    /// re-read the EXIF only, keep the derivatives.
+    metadata_only: bool,
 }
 
 struct Processed {
-    key: String,
     exif: Exif,
-    derived: Derived,
+    /// `None` for metadata-only jobs.
+    derivatives: Option<(String, Derived)>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -386,19 +389,28 @@ fn walk(
             .duration_since(UNIX_EPOCH)
             .map_or(0, |d| d.as_nanos() as i64);
 
-        let unchanged = !rebuild
-            && tx
-                .query_row(
-                    "SELECT 1 FROM media
+        // Unchanged file: `Some(metadata is current)`.
+        let unchanged: Option<bool> = if rebuild {
+            None
+        } else {
+            tx.query_row(
+                "SELECT coalesce(meta_version, 0) >= ?6 FROM media
                  WHERE album_id = ?1 AND file_name = ?2 AND size = ?3 AND mtime_ns = ?4
                    AND derived_version = ?5 AND error IS NULL",
-                    params![album_id, file_name, size as i64, mtime_ns, PIPELINE_VERSION],
-                    |_| Ok(()),
-                )
-                .optional()?
-                .is_some();
+                params![
+                    album_id,
+                    file_name,
+                    size as i64,
+                    mtime_ns,
+                    PIPELINE_VERSION,
+                    META_VERSION
+                ],
+                |r| r.get(0),
+            )
+            .optional()?
+        };
 
-        if unchanged {
+        if unchanged == Some(true) {
             tx.execute(
                 "UPDATE media SET seen_gen = ?1, missing_since = NULL
                  WHERE album_id = ?2 AND file_name = ?3",
@@ -411,6 +423,7 @@ fn walk(
                 path: entry.path().to_path_buf(),
                 size,
                 mtime_ns,
+                metadata_only: unchanged == Some(false),
             });
         }
     }
@@ -468,9 +481,17 @@ fn process(
         let mut pending = 0;
         let (mut busy, mut timed) = (Duration::ZERO, 0u32);
         for (job, result, took) in receiver {
-            busy += took;
-            timed += 1;
+            // Metadata-only jobs would make photos look faster than they are.
+            if !job.metadata_only {
+                busy += took;
+                timed += 1;
+            }
             let ok = match result {
+                Ok(processed) if job.metadata_only => {
+                    update_metadata(&tx, generation, &job, &processed.exif)?;
+                    summary.processed += 1;
+                    true
+                }
                 Ok(processed) => {
                     upsert_media(&tx, generation, &job, Some(&processed), None)?;
                     summary.processed += 1;
@@ -526,10 +547,51 @@ fn lower_priority() {
 }
 
 fn process_one(job: &Job, cache: &Path, rebuild: bool) -> Result<Processed> {
-    let key = derive::content_key(&job.path)?;
     let exif = meta::read_exif(&job.path);
+    if job.metadata_only {
+        return Ok(Processed {
+            exif,
+            derivatives: None,
+        });
+    }
+    let key = derive::content_key(&job.path)?;
     let derived = derive::generate(&job.path, cache, &key, rebuild)?;
-    Ok(Processed { key, exif, derived })
+    Ok(Processed {
+        exif,
+        derivatives: Some((key, derived)),
+    })
+}
+
+/// The EXIF columns only, for a file whose derivatives are current.
+fn update_metadata(conn: &Connection, generation: i64, job: &Job, exif: &Exif) -> Result<()> {
+    conn.execute(
+        "UPDATE media SET
+            make = ?3, model = ?4, lens = ?5, focal_mm = ?6, focal_35mm = ?7,
+            aperture = ?8, exposure_s = ?9, iso = ?10, exposure_bias = ?11,
+            taken_at = ?12, tz_offset_min = ?13, film_sim = ?14, fuji_recipe = ?15,
+            meta_version = ?16, seen_gen = ?17, missing_since = NULL
+         WHERE album_id = ?1 AND file_name = ?2",
+        params![
+            job.album_id,
+            job.file_name,
+            exif.make,
+            exif.model,
+            exif.lens,
+            exif.focal_mm,
+            exif.focal_35mm,
+            exif.aperture,
+            exif.exposure_s,
+            exif.iso,
+            exif.exposure_bias,
+            exif.taken_at,
+            exif.tz_offset_min,
+            exif.film_sim,
+            exif.recipe,
+            META_VERSION,
+            generation,
+        ],
+    )?;
+    Ok(())
 }
 
 fn upsert_media(
@@ -540,15 +602,21 @@ fn upsert_media(
     error: Option<&str>,
 ) -> Result<()> {
     let exif = processed.map(|p| &p.exif);
-    let derived = processed.map(|p| &p.derived);
+    let key = processed
+        .and_then(|p| p.derivatives.as_ref())
+        .map(|(key, _)| key);
+    let derived = processed
+        .and_then(|p| p.derivatives.as_ref())
+        .map(|(_, d)| d);
     conn.execute(
         "INSERT INTO media (
             album_id, file_name, kind, size, mtime_ns, content_key, width, height,
             thumbhash, avg_rgb, make, model, lens, focal_mm, focal_35mm, aperture,
             exposure_s, iso, exposure_bias, taken_at, tz_offset_min,
-            derived_version, error, seen_gen, missing_since)
+            derived_version, error, seen_gen, missing_since,
+            film_sim, fuji_recipe, meta_version)
          VALUES (?1, ?2, 'image', ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14,
-                 ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, NULL)
+                 ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, NULL, ?24, ?25, ?26)
          ON CONFLICT (album_id, file_name) DO UPDATE SET
             size = excluded.size, mtime_ns = excluded.mtime_ns,
             content_key = excluded.content_key, width = excluded.width,
@@ -560,13 +628,15 @@ fn upsert_media(
             exposure_bias = excluded.exposure_bias, taken_at = excluded.taken_at,
             tz_offset_min = excluded.tz_offset_min,
             derived_version = excluded.derived_version, error = excluded.error,
-            seen_gen = excluded.seen_gen, missing_since = NULL",
+            seen_gen = excluded.seen_gen, missing_since = NULL,
+            film_sim = excluded.film_sim, fuji_recipe = excluded.fuji_recipe,
+            meta_version = excluded.meta_version",
         params![
             job.album_id,
             job.file_name,
             job.size as i64,
             job.mtime_ns,
-            processed.map(|p| &p.key),
+            key,
             derived.map(|d| d.width),
             derived.map(|d| d.height),
             derived.map(|d| &d.thumbhash),
@@ -585,6 +655,9 @@ fn upsert_media(
             processed.map(|_| PIPELINE_VERSION),
             error,
             generation,
+            exif.and_then(|e| e.film_sim.as_deref()),
+            exif.and_then(|e| e.recipe.as_deref()),
+            processed.map(|_| META_VERSION),
         ],
     )?;
     Ok(())

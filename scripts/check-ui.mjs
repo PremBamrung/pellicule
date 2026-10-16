@@ -155,13 +155,15 @@ try {
     await shot("landing");
   }
 
-  // Every album with photos has the same four menus; a menu's only value
+  // Every album with photos has the same five menus; a menu's only value
   // is shown, not offered.
+  let withoutRecipe = null;
   for (const href of hrefs) {
     await go(href);
     if (!(await ev(`document.querySelectorAll("a.tile").length`))) continue;
+    if (await ev(`!document.querySelector("a.tile[data-recipe]")`)) withoutRecipe ??= href;
     const menus = await ev(`[...document.querySelectorAll(".filter")].map((f) => f.dataset.filter).join(",")`);
-    check(`four menus on ${href}`, menus === "day,camera,lens,focal", menus);
+    check(`five menus on ${href}`, menus === "day,camera,lens,focal,film", menus);
     const single = await ev(`[...document.querySelectorAll(".filter.single input")].every((i) => i.disabled)`);
     check(`single values are not choices on ${href}`, single);
   }
@@ -241,6 +243,24 @@ try {
     "Esc closes the list first",
     await ev(`document.querySelector(".pswp__help").hidden && !!document.querySelector(".pswp--open")`),
   );
+  // Fujifilm recipe: film on the label, the panel on "r", Esc closes it first.
+  const film = await ev(`document.querySelector("a.tile").dataset.fFilm`);
+  if (film) {
+    check("label names the film", (await ev(`document.querySelector(".pswp__label-gear").textContent`)).endsWith(` · ${film}`));
+    await key("r", "r");
+    check(
+      "r opens the recipe",
+      await ev(`!document.querySelector(".pswp__recipe").hidden
+        && document.querySelector(".pswp__recipe-film").textContent === ${JSON.stringify(film)}
+        && document.querySelectorAll(".pswp__recipe dt").length > 3`),
+    );
+    await shot("viewer-recipe");
+    await key("Escape");
+    check(
+      "Esc closes the recipe first",
+      await ev(`document.querySelector(".pswp__recipe").hidden && !!document.querySelector(".pswp--open")`),
+    );
+  } else console.log("skip recipe: the first photo has no film simulation");
   await ev(`document.querySelector(".pswp__button--play").click()`);
   await sleep(4500);
   check("slideshow advances", (await ev(`document.querySelector(".pswp__counter").textContent`)).startsWith("2 /"));
@@ -289,6 +309,22 @@ try {
   check("photo link opens the viewer", (await ev(`document.querySelector(".pswp__counter")?.textContent`))?.startsWith("3 /"));
   await ev(`document.querySelector(".pswp__button--close").click()`);
   await sleep(800);
+
+  // Photos from other makers have no recipe button.
+  if (withoutRecipe) {
+    await go(withoutRecipe);
+    await ev(`document.querySelector("a.tile").click()`);
+    await sleep(1500);
+    await key("r", "r");
+    check(
+      "no recipe without Fujifilm",
+      await ev(`document.querySelector(".pswp__button--recipe").hidden && document.querySelector(".pswp__recipe").hidden`),
+      withoutRecipe,
+    );
+    await ev(`document.querySelector(".pswp__button--close").click()`);
+    await sleep(800);
+    await go(albumHref);
+  }
 
   // Theme toggle (restored afterwards)
   await ev(`document.querySelector(".theme-toggle").click()`);

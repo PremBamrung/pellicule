@@ -10,7 +10,7 @@ Pellicule generates lives in a separate cache directory you can delete at any ti
 
 > **Status (October 2026):** browsable prototype. Scanning, previews, the
 > gallery (home, albums, viewer, filters) and the Library page work locally;
-> next are running it on the NAS, the Fujifilm recipe and share links.
+> the Fujifilm recipe is in; next are running it on the NAS and share links.
 > See the [roadmap](docs/roadmap.md).
 
 ## Goals

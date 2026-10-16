@@ -561,7 +561,7 @@ html .pswp { /* beats photoswipe.css, which loads later */
   --pswp-icon-color-secondary: var(--viewer);
   --pswp-icon-stroke-color: var(--viewer);
 }
-html .pswp .pswp__counter { color: var(--viewer-muted); text-shadow: none; }
+html .pswp .pswp__counter { color: var(--viewer-muted); text-shadow: none; white-space: nowrap; }
 
 .pswp__label {
   position: absolute;
@@ -610,6 +610,43 @@ html .pswp--zoomed-in .pswp__label { display: block; opacity: 0; }
 .pswp__help dt { color: var(--viewer-ink); font-weight: 500; }
 .pswp__help dd { margin: 0; color: var(--viewer-muted); }
 
+/* The Fujifilm recipe: typography only, beside the photo. */
+.pswp__button--recipe {
+  width: auto;
+  padding: 0 12px;
+  color: var(--pswp-icon-color);
+  font: 500 13px/1 var(--font);
+}
+.pswp__button--recipe[hidden] { display: none; }
+.pswp__recipe {
+  position: absolute;
+  top: 60px;
+  right: 24px;
+  z-index: 20;
+  width: 17rem;
+  padding: 16px 20px 18px;
+  border: 1px solid color-mix(in srgb, var(--viewer-ink) 14%, transparent);
+  background: var(--viewer);
+  color: var(--viewer-ink);
+  font: 400 13px/1.5 var(--font);
+  font-variant-numeric: tabular-nums;
+}
+.pswp__recipe[hidden] { display: none; }
+.pswp__recipe-film {
+  margin: 0 0 10px;
+  font-size: 20px;
+  font-weight: 500;
+  letter-spacing: -0.03em;
+}
+.pswp__recipe dl {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 3px 20px;
+  margin: 0;
+}
+.pswp__recipe dt { color: var(--viewer-muted); }
+.pswp__recipe dd { margin: 0; }
+
 .pswp__button--play svg { fill: var(--pswp-icon-color); }
 .pswp__button--fullscreen svg {
   fill: none;
@@ -620,6 +657,18 @@ html .pswp--zoomed-in .pswp__label { display: block; opacity: 0; }
 @media (max-width: 720px) {
   .pswp__label { left: 16px; bottom: 14px; font-size: 12px; }
   .pswp__label-date { font-size: 14px; }
+  /* A sheet over the bottom of the screen. */
+  .pswp__recipe {
+    top: auto;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    width: auto;
+    max-height: 60vh;
+    overflow-y: auto;
+    padding: 16px 16px calc(18px + env(safe-area-inset-bottom));
+    border-width: 1px 0 0;
+  }
 }
 
 /* ---- library page ---------------------------------------------------- */
