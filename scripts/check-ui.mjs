@@ -340,6 +340,42 @@ try {
   await shot("album-dark");
   await ev(`document.querySelector(".theme-toggle").click()`);
 
+  // Phone (iPhone-sized viewport): S / L only, a one-line strip follows
+  // the scroll, and the recipe sheet repeats the label it covers.
+  await send("Emulation.setDeviceMetricsOverride", { width: 390, height: 844, deviceScaleFactor: 3, mobile: true });
+  await send("Emulation.setTouchEmulationEnabled", { enabled: true });
+  await go(albumHref);
+  check("phone: no M size", await ev(`getComputedStyle(document.querySelector("[data-density=m]")).display === "none"`));
+  await ev(`document.querySelector("[data-density=l]").click()`);
+  await sleep(300);
+  const oneUp = await ev(`(() => {
+    const [a, b] = [...document.querySelectorAll("a.tile")].map((t) => t.getBoundingClientRect());
+    const grid = document.querySelector(".grid");
+    const width = grid.clientWidth - parseFloat(getComputedStyle(grid).paddingLeft) * 2;
+    return [Math.round(a.width), Math.round(width), b.top > a.bottom];
+  })()`);
+  check("phone: L is one photo per row", Math.abs(oneUp[0] - oneUp[1]) <= 1 && oneUp[2], `${oneUp[0]}px of ${oneUp[1]}px`);
+  await shot("phone-album-l");
+  await ev(`document.querySelector("[data-density=s]").click()`);
+  await sleep(300);
+  if (days > 1) {
+    await ev(`scrollTo(0, document.querySelectorAll(".day")[1].getBoundingClientRect().top + scrollY + 400)`);
+    await sleep(500);
+    const strip = await ev(`(() => {
+      const strip = document.querySelector(".bar-id");
+      return [getComputedStyle(strip).position, Math.round(strip.getBoundingClientRect().height),
+        document.querySelector(".bar-day").textContent === document.querySelectorAll(".day-title")[1].textContent];
+    })()`);
+    check("phone: one-line strip follows the scroll", strip[0] === "fixed" && strip[1] < 64 && strip[2], strip.join(", "));
+    check("phone: the filters scroll away", await ev(`document.querySelector(".toolbar").getBoundingClientRect().bottom < 0`));
+    await shot("phone-album-strip");
+    await ev("scrollTo(0, 0)");
+  }
+  // Back to the desktop default.
+  await ev(`document.querySelector("[data-density=m]").click()`);
+  await send("Emulation.setTouchEmulationEnabled", { enabled: false });
+  await send("Emulation.clearDeviceMetricsOverride");
+
   // Library page (read-only: no scan is started)
   await go("/library");
   check("library page", !!(await ev(`document.querySelector(".page-lede")?.textContent`)));

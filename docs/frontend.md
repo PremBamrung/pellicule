@@ -159,6 +159,12 @@ lazily when the viewer opens.
   wordmark (home), the album name and the current day ("Saturday 7 October")
   — on narrower screens on a line of its own. Albums spanning several days
   are split into **day sections** with a quiet heading each.
+- **Album on phones** — the density switch has two sizes, **S** (the grid;
+  a remembered M shows as S) and **L** (one photo per row, full width),
+  on the filters' last line. The filters stay at the top of the page and
+  scroll away; only a one-line frosted strip follows (`Pellicule · Japon ·
+  Saturday 7 October`). Tablets and phones turned sideways (wider than
+  720 px) get S / M / L and the desktop bar.
 - **Viewer** — PhotoSwipe with the museum label (hidden while zoomed in);
   **slideshow** via the play button or the space bar (4 s per photo);
   **fullscreen** via its button or `f` (not on iPhone, where pages can't go

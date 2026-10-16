@@ -42,13 +42,13 @@
   --viewer-muted: #a3a29a;
 }
 
-/* Grid density, chosen with the S / M / L switch and remembered. */
+/* Grid density, chosen with the S / M / L switch and remembered. Phones
+   have two sizes: S is the grid (M reads as S), L one photo per row. */
 :root[data-density="s"] { --row: 200px; }
 :root[data-density="l"] { --row: 460px; }
 @media (max-width: 720px) {
-  :root { --row: 160px; --gap: 3px; }
-  :root[data-density="s"] { --row: 110px; }
-  :root[data-density="l"] { --row: 260px; }
+  :root, :root[data-density="s"] { --row: 160px; --gap: 8px; }
+  :root[data-density="l"] .tile { flex: 1 1 100%; }
 }
 
 *, *::before, *::after { box-sizing: border-box; }
@@ -398,6 +398,34 @@ main { padding-bottom: 120px; }
   .is-stuck .bar-id { visibility: visible; }
 }
 
+/* Phones: the filters stay at the top of the page and scroll away; only a
+   one-line strip (wordmark, album, day) follows. The strip is fixed, so the
+   bar's height never changes and nothing jumps when it appears. */
+@media (max-width: 720px) {
+  .album-bar,
+  .album-bar.is-stuck {
+    position: static;
+    margin-top: 0;
+    pointer-events: auto;
+    background: none;
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+  .bar-id,
+  .is-stuck .bar-id { display: none; }
+  .is-stuck .bar-id {
+    position: fixed;
+    inset: 0 0 auto;
+    z-index: 30;
+    display: flex;
+    height: auto;
+    padding: 14px var(--gutter);
+    background: color-mix(in srgb, var(--wall) 86%, transparent);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+  }
+}
+
 .toolbar {
   display: flex;
   flex: 1;
@@ -496,6 +524,15 @@ main { padding-bottom: 120px; }
   text-decoration-color: var(--accent);
   text-decoration-thickness: 2px;
   text-underline-offset: 6px;
+}
+
+/* Phones: the filters and S / L share one flow, "Film ▾ ...... S  L". */
+@media (max-width: 720px) {
+  .toolbar { justify-content: flex-start; gap: 8px 28px; }
+  .filters { display: contents; }
+  .filter-status { flex-basis: 100%; order: 1; }
+  .density { margin-left: auto; }
+  .density [data-density="m"] { display: none; }
 }
 
 /* ---- days: a quiet heading per day; the album bar names the current one */

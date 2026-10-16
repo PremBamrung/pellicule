@@ -594,23 +594,32 @@ if (toggle) {
 
 // ---- grid density: S / M / L, remembered per browser ---------------------
 
+// Phones have S (the grid; M reads as S) and L (one photo per row).
 const density = document.querySelector(".density");
 if (density) {
+  const phone = matchMedia("(max-width: 720px)");
+  // Row heights in app.css; null is one photo per row, full width.
   const ROW = { s: 200, m: 300, l: 460 };
+  const PHONE_ROW = { s: 160, m: 160, l: null };
   const tiles = document.querySelectorAll("a.tile img");
+  let current = root.dataset.density ?? "m";
   const apply = (size) => {
+    current = size;
     if (size === "m") delete root.dataset.density;
     else root.dataset.density = size;
+    const shown = phone.matches && size === "m" ? "s" : size;
     for (const button of density.querySelectorAll("button")) {
-      button.setAttribute("aria-pressed", String(button.dataset.density === size));
+      button.setAttribute("aria-pressed", String(button.dataset.density === shown));
     }
     // Keep `sizes` in step with the row height so the right file loads.
+    const row = (phone.matches ? PHONE_ROW : ROW)[size];
     for (const img of tiles) {
       const ar = parseFloat(img.parentElement.style.getPropertyValue("--ar")) || 1.5;
-      img.sizes = `${Math.round(ar * ROW[size])}px`;
+      img.sizes = row ? `${Math.round(ar * row)}px` : "100vw";
     }
   };
-  apply(root.dataset.density ?? "m");
+  apply(current);
+  phone.addEventListener("change", () => apply(current));
   density.addEventListener("click", (event) => {
     const size = event.target.closest("button")?.dataset.density;
     if (!size) return;
@@ -735,10 +744,13 @@ if (filters && photos) {
 const bar = document.querySelector(".album-bar");
 if (bar) {
   const head = document.querySelector(".album-head");
+  const strip = bar.querySelector(".bar-id");
   const day = bar.querySelector(".bar-day");
   const sections = [...document.querySelectorAll(".day")].filter((s) => s.querySelector(".day-title"));
+  let refresh = () => {};
   new IntersectionObserver(([entry]) => {
     bar.classList.toggle("is-stuck", !entry.isIntersecting && entry.boundingClientRect.top < 0);
+    refresh();
   }).observe(head);
 
   // The current day is the last shown one whose heading is under the bar.
@@ -746,7 +758,9 @@ if (bar) {
     let queued = false;
     const update = () => {
       queued = false;
-      const line = bar.getBoundingClientRect().bottom + 1;
+      // On phones only the strip follows the scroll; the bar scrolls away.
+      const line =
+        (getComputedStyle(bar).position === "static" ? strip : bar).getBoundingClientRect().bottom + 1;
       let current = null;
       for (const section of sections) {
         if (section.hidden) continue;
@@ -763,6 +777,7 @@ if (bar) {
       },
       { passive: true },
     );
+    refresh = update;
     update();
   }
 }
