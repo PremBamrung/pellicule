@@ -6,12 +6,12 @@ never written to. Deleting the cache is always safe; it only costs a rescan.
 ```
 <cache>/
 ├── pellicule.db            SQLite (WAL): albums, media, exif, derivatives, shares
-├── d/ab/cd/<key>-t.v2.webp grid thumbnail
-├── d/ab/cd/<key>-m.v2.webp grid 2× / cover
-├── d/ab/cd/<key>-l.v2.webp viewer
-├── d/ab/cd/<key>-x.v2.webp zoom
-├── d/ab/cd/<key>-p.v2.webp video poster
-└── d/ab/cd/<key>-v720.v2.mp4  video preview
+├── d/ab/cd/<key>-t.v3.webp grid thumbnail
+├── d/ab/cd/<key>-m.v3.webp grid 2× / cover
+├── d/ab/cd/<key>-l.v3.webp viewer
+├── d/ab/cd/<key>-x.v3.jpg  zoom
+├── d/ab/cd/<key>-p.v3.webp video poster (planned)
+└── d/ab/cd/<key>-v720.v3.mp4  video preview (planned)
 ```
 
 ## Identity: two keys
@@ -26,7 +26,7 @@ never written to. Deleting the cache is always safe; it only costs a rescan.
   two different files can never share derivatives. Because derivatives are
   named by content, **moving or renaming a file reuses its cache** and URLs
   never go stale.
-- The pipeline version (`v2`) is part of every variant name. Changing sizes,
+- The pipeline version (`v3`) is part of every variant name. Changing sizes,
   quality or processing bumps it, and every file is reprocessed on the next
   scan; old files stay on disk until garbage collection exists (planned).
 
@@ -36,16 +36,26 @@ All variants fit inside a long-edge box, never upscale, and have orientation app
 
 | Variant | Long edge | Format | When | Typical size | Use |
 |---|---|---|---|---|---|
-| `t` | 480 | WebP q75 | Scan (eager) | 15–35 KB | Grid tiles |
-| `m` | 960 | WebP q78 | Scan (eager) | 60–120 KB | Grid on 2× screens, album covers |
-| `l` | 2048 | WebP q80, 4:4:4 chroma | Scan (eager) | 250–500 KB | Viewer; **largest variant on public shares** |
-| `x` | 4096 | WebP q82, 4:4:4 chroma | Scan (eager) | 1–2 MB | Zoom on the private side |
+| `t` | 480 | WebP q75, effort 2 | Scan (eager) | ~20 KB | Grid tiles, album strips |
+| `m` | 960 | WebP q78, effort 2 | Scan (eager) | ~65 KB | Grid on 2× screens, album covers |
+| `l` | 2048 | WebP q80, effort 2 | Scan (eager) | ~270 KB | Viewer; **largest variant on public shares** |
+| `x` | 4096 | JPEG q85, optimised Huffman tables | Scan (eager) | ~1.8 MB | Zoom on the private side |
 | original | — | as-is | — | — | Download only (private side, or shares with `allow_download`) |
 
 **Why everything is eager:** the library lives on HDDs that spin down, the
 cache on the NAS SSD. With every variant generated at scan time, browsing,
 viewing and zooming never wake the disks; only a scan or an original download
-does. Budget roughly 2–2.5 MB of SSD per photo for all four variants.
+does. Budget roughly 2.5 MB of SSD per photo for all four variants (2.1 MB on
+average for the 26 MP prototype library).
+
+**Why JPEG for the zoom size:** encoding a 4096 px WebP took about 60% of
+the time spent on each photo. As a JPEG it encodes about 9× faster, for files
+about 50% larger, and it is only fetched when zooming, on the private side,
+from the SSD. The WebP sizes use effort 2 instead of 4 (about twice as fast,
+files ~3% larger); `smart_subsample` made no difference on camera JPEGs. JPEG
+has no alpha: transparent areas of the zoom size are flattened onto white.
+Together (pipeline v3): 0.42 s per photo per worker instead of ~1.5 s on an
+M4 Pro, a full scan of 506 photos with 2 workers in 1m 49s instead of 6m 27s.
 
 Plus, per image, stored in SQLite:
 - **ThumbHash** (~25 bytes) and **average colour**: placeholder and tile background.

@@ -17,35 +17,65 @@ use libvips::{VipsImage, bindings, ops};
 // (`file.webp[Q=80,...]`), which sends just the options we write.
 
 /// Bump when sizes, quality or processing change: everything is regenerated.
-pub const PIPELINE_VERSION: i64 = 2;
+/// v3: the zoom size as JPEG, WebP at effort 2 (about 3× faster scans).
+pub const PIPELINE_VERSION: i64 = 3;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Format {
+    Webp,
+    Jpeg,
+}
+
+impl Format {
+    pub fn extension(self) -> &'static str {
+        match self {
+            Format::Webp => "webp",
+            Format::Jpeg => "jpg",
+        }
+    }
+
+    pub fn content_type(self) -> &'static str {
+        match self {
+            Format::Webp => "image/webp",
+            Format::Jpeg => "image/jpeg",
+        }
+    }
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Variant {
     pub name: &'static str,
     pub long_edge: u32,
+    pub format: Format,
     quality: i32,
 }
 
 /// Largest first: each variant is made from the previous one.
 pub const VARIANTS: [Variant; 4] = [
+    // Only fetched when zooming, on the private side: a JPEG encodes about
+    // 9× faster than a WebP this size, for files ~25% larger.
     Variant {
         name: "x",
         long_edge: 4096,
-        quality: 82,
+        format: Format::Jpeg,
+        quality: 85,
     },
     Variant {
         name: "l",
         long_edge: 2048,
+        format: Format::Webp,
         quality: 80,
     },
     Variant {
         name: "m",
         long_edge: 960,
+        format: Format::Webp,
         quality: 78,
     },
     Variant {
         name: "t",
         long_edge: 480,
+        format: Format::Webp,
         quality: 75,
     },
 ];
@@ -77,9 +107,13 @@ pub fn content_key(path: &Path) -> Result<String> {
     Ok(hasher.finalize().to_hex()[..32].to_string())
 }
 
-/// `<cache>/d/ab/cd/<key>-<variant>.v<N>.webp`
+/// `<cache>/d/ab/cd/<key>-<variant>.v<N>.<webp|jpg>`
 pub fn file_name(key: &str, variant: Variant) -> String {
-    format!("{key}-{}.v{PIPELINE_VERSION}.webp", variant.name)
+    format!(
+        "{key}-{}.v{PIPELINE_VERSION}.{}",
+        variant.name,
+        variant.format.extension()
+    )
 }
 
 pub fn path(cache: &Path, key: &str, variant: Variant) -> PathBuf {
@@ -167,19 +201,22 @@ fn save(image: &VipsImage, cache: &Path, key: &str, variant: Variant) -> Result<
     std::fs::create_dir_all(dir)?;
     // Write next to the target and rename, so a crash never leaves a
     // truncated file under the final (immutable, long-cached) name.
-    let tmp = dir.join(format!(".{}.tmp.webp", file_name(key, variant)));
-    let smart_subsample = if variant.quality >= 80 {
-        ",smart_subsample=true"
-    } else {
-        ""
+    // libvips picks the encoder from the extension.
+    let extension = variant.format.extension();
+    let tmp = dir.join(format!(".{}.tmp.{extension}", file_name(key, variant)));
+    // Effort 2 is about twice as fast as 4 for 2.5% larger files;
+    // smart_subsample made no difference on camera JPEGs.
+    let options = match variant.format {
+        Format::Webp => format!("[Q={},effort=2,keep=none]", variant.quality),
+        // No alpha in JPEG: transparent areas go white, like the wall.
+        Format::Jpeg => format!(
+            "[Q={},optimize_coding=true,keep=none,background=255]",
+            variant.quality
+        ),
     };
-    let options = format!(
-        "[Q={},effort=4,keep=none{smart_subsample}]",
-        variant.quality
-    );
     image
         .image_write_to_file(&format!("{}{options}", utf8(&tmp)?))
-        .map_err(|e| vips_error("encoding WebP", e))?;
+        .map_err(|e| vips_error(&format!("encoding {extension}"), e))?;
     std::fs::rename(&tmp, &target)?;
     Ok(())
 }
@@ -315,9 +352,25 @@ mod tests {
             .map(|v| {
                 let file = path(&cache, &key, *v);
                 let bytes = std::fs::read(&file).unwrap();
-                // No colour profile, EXIF or XMP chunk survives.
-                for chunk in [b"ICCP", b"EXIF", b"XMP "] {
-                    assert!(!bytes.windows(4).any(|w| w == chunk), "{name} {}", v.name);
+                // The right format, and no colour profile, EXIF or XMP survives.
+                match v.format {
+                    Format::Webp => assert_eq!(&bytes[8..12], b"WEBP", "{name} {}", v.name),
+                    Format::Jpeg => assert_eq!(&bytes[..3], b"\xff\xd8\xff", "{name} {}", v.name),
+                }
+                let markers: [&[u8]; 6] = [
+                    b"ICCP",
+                    b"EXIF",
+                    b"XMP ",
+                    b"ICC_PROFILE",
+                    b"Exif\0",
+                    b"ns.adobe.com/xap",
+                ];
+                for marker in markers {
+                    assert!(
+                        !bytes.windows(marker.len()).any(|w| w == marker),
+                        "{name} {}",
+                        v.name
+                    );
                 }
                 let image = VipsImage::new_from_buffer(&bytes, "").unwrap();
                 let image = VipsImage::image_copy_memory(image).unwrap();
@@ -376,9 +429,18 @@ mod tests {
     fn grayscale_alpha_keeps_its_alpha() {
         let (_, variants) = derive_fixture("gray-alpha.png");
         for (v, image) in &variants {
-            assert!(image.image_hasalpha(), "{}", v.name);
             let px = pixel(image, 4, 4);
-            assert!((px[0] - 128.0).abs() < 8.0, "{}: {px:?}", v.name);
+            match v.format {
+                Format::Webp => {
+                    assert!(image.image_hasalpha(), "{}", v.name);
+                    assert!((px[0] - 128.0).abs() < 8.0, "{}: {px:?}", v.name);
+                }
+                // Grey 128 at alpha 200, flattened onto white: about 155.
+                Format::Jpeg => {
+                    assert!(!image.image_hasalpha(), "{}", v.name);
+                    assert!((px[0] - 155.0).abs() < 8.0, "{}: {px:?}", v.name);
+                }
+            }
         }
     }
 

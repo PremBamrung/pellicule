@@ -41,6 +41,7 @@
             <th scope="col">Type</th>
             <th scope="col">Result</th>
             <th scope="col" class="num">Duration</th>
+            <th scope="col" class="num">Per photo</th>
             <th scope="col" class="num">Processed</th>
             <th scope="col" class="num">Failed</th>
             <th scope="col" class="num">Missing</th>
@@ -51,7 +52,7 @@
           {% if run.quiet > 0 %}
           <tr class="quiet">
             <td>{{ run.started }}</td>
-            <td colspan="6">{{ run.quiet }} scans with no changes</td>
+            <td colspan="7">{{ run.quiet }} scans with no changes</td>
           </tr>
           {% else %}
           <tr>
@@ -59,6 +60,7 @@
             <td>{{ run.trigger }}</td>
             <td><span class="status status-{{ run.status }}">{{ run.status }}</span>{% if !run.error.is_empty() %}<span class="run-error">{{ run.error }}</span>{% endif %}</td>
             <td class="num">{{ run.duration }}</td>
+            <td class="num" data-label="per photo">{{ run.per_photo }}</td>
             <td class="num" data-label="processed">{{ run.processed }}</td>
             <td class="num" data-label="failed">{{ run.failed }}</td>
             <td class="num" data-label="missing">{{ run.missing }}</td>

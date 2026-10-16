@@ -95,7 +95,7 @@ send **every** optional argument by name, including ones renamed after 8.16
 (`input-profile` was `import-profile`), so on 8.16 the whole call fails.
 Rule: only call binding functions **without** options (`ops::thumbnail`,
 `ops::thumbnail_image`, `ops::icc_transform`), and pass save options in
-libvips' filename syntax (`image_write_to_file("x.webp[Q=80,effort=4,keep=none]")`).
+libvips' filename syntax (`image_write_to_file("l.webp[Q=80,effort=2,keep=none]")`).
 
 Never create a temporary `VipsApp` (e.g. `VipsApp.error_clear()`): dropping
 one calls `vips_shutdown` for the whole process. Use the raw

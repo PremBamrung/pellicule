@@ -46,16 +46,19 @@ docker compose exec pellicule pellicule scan --rebuild  # everything
 
 Verified on 2026-10-15 with Docker Desktop on a Mac (arm64): image builds,
 health check passes, 200 Fujifilm JPEGs scanned with 2 workers in 3 minutes
-(about 1.8 s per photo per worker), ~216 MB RAM during the scan, all UI
-checks pass. Not yet run on the N100 itself.
+(about 1.8 s per photo per worker, before pipeline v3), ~216 MB RAM during
+the scan, all UI checks pass. Not yet run on the N100 itself.
 
 ### Scan speed and CPU
 
 A scan processes `[scan] workers` photos in parallel (default: half the CPU
 cores, so 2 on the N100) and, on Linux, runs its workers at low priority
 (`nice 10`) so the gallery and the NAS stay responsive. The first scan of a
-large library takes a while: budget roughly one photo per second per worker
-for 26 MP JPEGs on an N100 (to be measured). Lower `workers` for a gentler
+large library takes a while. On an M4 Pro a 26 MP JPEG takes about 0.42 s
+per worker (the Library page shows this "per photo" time for every scan); an
+N100 core is roughly 3× slower, so expect about 1.3 s per photo per worker,
+or around 2 hours for 10,000 photos with 2 workers (to be measured). Later
+scans only process new and changed photos. Lower `workers` for a gentler
 scan, raise it for a faster one.
 
 Update:

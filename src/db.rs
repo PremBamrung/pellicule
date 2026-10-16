@@ -67,6 +67,11 @@ const MIGRATIONS: &[&str] = &[
         error       TEXT
     );
 "#,
+    r#"
+    -- Average processing time per photo and per worker (hash, EXIF,
+    -- previews): comparable across machines and worker counts.
+    ALTER TABLE scan_run ADD COLUMN photo_ms INTEGER;
+"#,
 ];
 
 pub fn open(cache_dir: &Path) -> Result<Connection> {

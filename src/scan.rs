@@ -27,6 +27,8 @@ pub struct ScanSummary {
     pub skipped_videos: usize,
     pub missing: usize,
     pub cancelled: bool,
+    /// Average time to process one photo on one worker.
+    pub photo_ms: Option<u64>,
 }
 
 struct Job {
@@ -197,7 +199,7 @@ pub fn run(
     let summary = result.as_ref().ok();
     conn.execute(
         "UPDATE scan_run SET finished_at = ?2, status = ?3, images = ?4, processed = ?5,
-            failed = ?6, missing = ?7, error = ?8
+            failed = ?6, missing = ?7, error = ?8, photo_ms = ?9
          WHERE id = ?1",
         params![
             run_id,
@@ -208,6 +210,7 @@ pub fn run(
             summary.map(|s| s.failed as i64),
             summary.map(|s| s.missing as i64),
             error,
+            summary.and_then(|s| s.photo_ms).map(|ms| ms as i64),
         ],
     )?;
     result
@@ -288,6 +291,7 @@ fn run_inner(
         failed = summary.failed,
         missing = summary.missing,
         skipped_videos = summary.skipped_videos,
+        photo_ms = summary.photo_ms,
         elapsed = ?started.elapsed(),
         "scan complete"
     );
@@ -443,7 +447,7 @@ fn process(
         .build()?;
     tracing::info!(workers, "processing");
 
-    let (sender, receiver) = mpsc::channel::<(Job, Result<Processed>)>();
+    let (sender, receiver) = mpsc::channel::<(Job, Result<Processed>, Duration)>();
 
     std::thread::scope(|scope| -> Result<()> {
         scope.spawn(move || {
@@ -452,8 +456,9 @@ fn process(
                     if control.cancelled() {
                         return;
                     }
+                    let started = Instant::now();
                     let result = process_one(&job, &cache, rebuild);
-                    let _ = sender.send((job, result));
+                    let _ = sender.send((job, result, started.elapsed()));
                 });
             });
         });
@@ -461,7 +466,10 @@ fn process(
         let mut last_log = Instant::now();
         let mut tx = conn.transaction()?;
         let mut pending = 0;
-        for (job, result) in receiver {
+        let (mut busy, mut timed) = (Duration::ZERO, 0u32);
+        for (job, result, took) in receiver {
+            busy += took;
+            timed += 1;
             let ok = match result {
                 Ok(processed) => {
                     upsert_media(&tx, generation, &job, Some(&processed), None)?;
@@ -501,6 +509,9 @@ fn process(
             }
         }
         tx.commit()?;
+        if timed > 0 {
+            summary.photo_ms = Some((busy / timed).as_millis() as u64);
+        }
         Ok(())
     })
 }

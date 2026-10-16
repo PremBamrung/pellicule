@@ -269,17 +269,17 @@ async fn derivative(
     let Some((key, rest)) = file.split_once('-') else {
         return not_found().await;
     };
-    let valid = key.len() == 32
+    let variant = rest
+        .split_once('.')
+        .and_then(|(variant, _)| derive::variant(variant))
+        .filter(|variant| derive::file_name(key, *variant) == file);
+    let valid_key = key.len() == 32
         && key
             .bytes()
-            .all(|b| b.is_ascii_hexdigit() && !b.is_ascii_uppercase())
-        && rest
-            .split_once('.')
-            .and_then(|(variant, _)| derive::variant(variant))
-            .is_some_and(|variant| derive::file_name(key, variant) == file);
-    if !valid {
+            .all(|b| b.is_ascii_hexdigit() && !b.is_ascii_uppercase());
+    let Some(variant) = variant.filter(|_| valid_key) else {
         return not_found().await;
-    }
+    };
 
     let etag = format!("\"{file}\"");
     if headers
@@ -300,7 +300,10 @@ async fn derivative(
     match tokio::fs::read(&path).await {
         Ok(bytes) => (
             [
-                (header::CONTENT_TYPE, "image/webp".to_string()),
+                (
+                    header::CONTENT_TYPE,
+                    variant.format.content_type().to_string(),
+                ),
                 (header::CACHE_CONTROL, IMMUTABLE.to_string()),
                 (header::ETAG, etag),
             ],

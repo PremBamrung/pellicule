@@ -7,7 +7,7 @@ live in the linked docs; this page is the short version.
 |---|---|---|
 | Scope | Curated, read-only gallery: folder = album, no import, no upload, no culling | Sorting and culling happen upstream; the gallery only shows finished work. See [conventions](conventions.md). |
 | Language | Rust | Memory safety for untrusted file parsing and public share links, small and predictable RAM on a NAS, one binary. See [architecture](architecture.md#why-rust). |
-| Image processing | libvips, four WebP variants (480 / 960 / 2048 / 4096) | Shrink-on-load is the biggest speed win on 26 MP JPEGs; WebP encodes ~10× faster than AVIF on a NAS CPU. See [cache](cache.md). |
+| Image processing | libvips; three WebP variants (480 / 960 / 2048, effort 2) and a JPEG zoom size (4096) | Shrink-on-load is the biggest speed win on 26 MP JPEGs; WebP encodes ~10× faster than AVIF on a NAS CPU; the zoom size as JPEG and effort 2 make scans ~3.5× faster. See [cache](cache.md). |
 | When to generate | Everything at scan time, cache on SSD | The library lives on HDDs that spin down: browsing, viewing and zooming must never wake them. |
 | Cache identity | BLAKE3 of the whole file | Renamed or moved files reuse their previews; URLs never go stale. A partial hash (first/last 64 KiB) was dropped: two files with the same ends would share previews. |
 | Index | SQLite in the cache directory | One file, no server, disposable (a rescan rebuilds it). |

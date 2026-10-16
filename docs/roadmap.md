@@ -11,7 +11,7 @@ X-T3/X-E3 JPEGs) and is ready to be tried on the NAS with Docker Compose.
 | Area | Status |
 |---|---|
 | Scan & index | ✅ incremental, content-keyed, crash/unmount-safe |
-| Derivatives | ✅ 4 WebP sizes at scan time, ThumbHash, average colour |
+| Derivatives | ✅ 3 WebP sizes + JPEG zoom size at scan time, ThumbHash, average colour |
 | Browsing | ✅ home photos, album cards (strip, colours, dates, gear), justified grid, day sections, viewer |
 | Filters | ✅ day, camera, lens, focal range (in the browser, URL state) |
 | Library page | ✅ rescan / rebuild / cancel, live progress, history, failures |
@@ -31,7 +31,7 @@ X-T3/X-E3 JPEGs) and is ready to be tried on the NAS with Docker Compose.
 ### M1–M3 thin slice — browse the library
 - SQLite index (albums, media, standard EXIF), incremental scan with fast-key
   skip, whole-file BLAKE3 content keys, empty-root guard, missing files marked.
-- libvips: all four WebP variants at scan time (HDD-friendly), converted to
+- libvips: all four variants at scan time (HDD-friendly), converted to
   sRGB, ThumbHash + average colour. Fixture tests (orientation, wide gamut,
   alpha, no upscale) pass on libvips 8.16 and 8.18.
 - Pages: home, album (sub-albums + justified grid), PhotoSwipe viewer (4096
@@ -51,6 +51,12 @@ X-T3/X-E3 JPEGs) and is ready to be tried on the NAS with Docker Compose.
 ### Frontend pass 3
 - Home photos: six random photos crossfading, each linking to its place in
   the album (`/a/<album>#p=<key>`); replaced by rows of photos in pass 4.
+
+### Faster scans
+- Pipeline v3: the 4096 px zoom size as JPEG q85, WebP at effort 2. A full
+  scan of the 506-photo prototype library with 2 workers: 1m 49s instead of
+  6m 27s (0.42 s per photo per worker on an M4 Pro).
+- Per-photo time recorded for every scan and shown in the Library history.
 
 ### Frontend pass 5
 - Home: a hairline and an "Albums" heading (stats on the same line) between

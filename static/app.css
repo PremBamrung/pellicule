@@ -722,7 +722,7 @@ html .pswp--zoomed-in .pswp__label { display: block; opacity: 0; }
 .history .quiet td { color: var(--muted); }
 
 /* Phones: each scan on two lines, "15 Oct, 17:41 · On start" then
-   "Done · 6m 27s · 506 processed · 0 failed · 0 missing". */
+   "Done · 6m 27s · 0.62s per photo · 506 processed · 0 failed · 0 missing". */
 @media (max-width: 720px) {
   .history thead { display: none; }
   .history tr {

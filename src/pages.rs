@@ -94,6 +94,8 @@ pub struct ScanRun {
     pub trigger: String,
     pub status: String,
     pub duration: String,
+    /// "0.62s": average per photo and per worker.
+    pub per_photo: String,
     pub processed: String,
     pub failed: String,
     pub missing: String,
@@ -823,7 +825,8 @@ pub fn library<'a>(
     }
 
     let mut stmt = conn.prepare(
-        "SELECT started_at, finished_at, trigger, rebuild, status, processed, failed, missing, error
+        "SELECT started_at, finished_at, trigger, rebuild, status, processed, failed, missing, error,
+                photo_ms
          FROM scan_run ORDER BY id DESC LIMIT 200",
     )?;
     let raw = stmt
@@ -838,6 +841,7 @@ pub fn library<'a>(
                 failed: r.get(6)?,
                 missing: r.get(7)?,
                 error: r.get(8)?,
+                photo_ms: r.get(9)?,
             })
         })?
         .collect::<rusqlite::Result<Vec<_>>>()?;
@@ -895,6 +899,16 @@ fn format_bytes(bytes: u64) -> String {
     }
 }
 
+/// "0.62s", "1.5s", "12s".
+fn format_per_photo(ms: i64) -> String {
+    let s = ms as f64 / 1000.0;
+    match s {
+        s if s < 1.0 => format!("{s:.2}s"),
+        s if s < 10.0 => format!("{s:.1}s"),
+        s => format!("{s:.0}s"),
+    }
+}
+
 fn format_duration(seconds: i64) -> String {
     match seconds {
         s if s < 60 => format!("{s}s"),
@@ -914,6 +928,7 @@ struct RawRun {
     failed: Option<i64>,
     missing: Option<i64>,
     error: Option<String>,
+    photo_ms: Option<i64>,
 }
 
 impl RawRun {
@@ -942,6 +957,7 @@ fn history(raw: &[RawRun], rows: usize) -> Vec<ScanRun> {
                 trigger: String::new(),
                 status: String::new(),
                 duration: String::new(),
+                per_photo: String::new(),
                 processed: String::new(),
                 failed: String::new(),
                 missing: String::new(),
@@ -967,6 +983,7 @@ fn history(raw: &[RawRun], rows: usize) -> Vec<ScanRun> {
                 .finished
                 .map(|f| format_duration(f - run.started))
                 .unwrap_or_default(),
+            per_photo: run.photo_ms.map(format_per_photo).unwrap_or_default(),
             processed: number(run.processed),
             failed: number(run.failed),
             missing: number(run.missing),
@@ -1187,6 +1204,8 @@ mod tests {
         assert_eq!(format_duration(42), "42s");
         assert_eq!(format_duration(125), "2m 05s");
         assert_eq!(format_duration(7260), "2h 01m");
+        assert_eq!(format_per_photo(617), "0.62s");
+        assert_eq!(format_per_photo(1530), "1.5s");
     }
 
     #[test]
@@ -1201,6 +1220,7 @@ mod tests {
             failed: Some(0),
             missing: Some(0),
             error: None,
+            photo_ms: None,
         };
         // Newest first: two quiet, one busy, three quiet, one interrupted, one quiet.
         let raw = [
