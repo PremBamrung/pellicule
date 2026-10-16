@@ -159,7 +159,10 @@ lazily when the viewer opens.
   title has scrolled away the bar stays at the top, frosted, with the
   wordmark (home), the album name and the current day ("Saturday 7 October")
   — on narrower screens on a line of its own. Albums spanning several days
-  are split into **day sections** with a quiet heading each.
+  are split into **day sections** with a quiet heading each. After the
+  last row, a hairline and **Next** with the next album's card: its sibling
+  in the cards' order (most recent first), wrapping round after the last;
+  none for an album without siblings.
 - **Album on phones** — the density switch has two sizes, **S** (the grid;
   a remembered M shows as S) and **L** (one photo per row, full width),
   on the filters' last line. The filters stay at the top of the page and

@@ -168,10 +168,16 @@ try {
   }
 
   // Every album with photos has the same five menus; a menu's only value
-  // is shown, not offered.
+  // is shown, not offered. After the grid, the next album in the home
+  // order, wrapping round after the last.
   let withoutRecipe = null;
-  for (const href of hrefs) {
+  for (const [i, href] of hrefs.entries()) {
     await go(href);
+    if (hrefs.length > 1) {
+      const next = await ev(`document.querySelector(".next-album .album-card")?.getAttribute("href")`);
+      const expected = hrefs[(i + 1) % hrefs.length];
+      check(`next album after ${href}`, next === expected, `${next}, expected ${expected}`);
+    }
     if (!(await ev(`document.querySelectorAll("a.tile").length`))) continue;
     if (await ev(`!document.querySelector("a.tile[data-recipe]")`)) withoutRecipe ??= href;
     const menus = await ev(`[...document.querySelectorAll(".filter")].map((f) => f.dataset.filter).join(",")`);

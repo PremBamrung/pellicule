@@ -1,7 +1,7 @@
 # Roadmap
 
 Milestones are small and each ends with something usable. Last updated
-2026-10-15.
+2026-10-16.
 
 ## Where we are
 
@@ -12,7 +12,7 @@ X-T3/X-E3 JPEGs) and is ready to be tried on the NAS with Docker Compose.
 |---|---|
 | Scan & index | ✅ incremental, content-keyed, crash/unmount-safe |
 | Derivatives | ✅ 3 WebP sizes + JPEG zoom size at scan time, ThumbHash, average colour |
-| Browsing | ✅ home photos, album cards (cover flip, colours, dates, gear), justified grid, day sections, viewer |
+| Browsing | ✅ home photos, album cards (cover flip, dates), justified grid, day sections, next album, viewer |
 | Filters | ✅ day, camera, lens, focal range (in the browser, URL state) |
 | Library page | ✅ rescan / rebuild / cancel, live progress, history, failures |
 | Look | ✅ white by default + dark toggle, Geist, blur-up placeholders, transitions |
@@ -63,6 +63,18 @@ X-T3/X-E3 JPEGs) and is ready to be tried on the NAS with Docker Compose.
   without touching derivatives (506 photos in 0.34 s).
 - Viewer: film simulation on the label; **Recipe** button / `r` (panel on
   desktop, bottom sheet on phones). Albums: a **Film** filter menu.
+
+### Frontend pass 7
+- Album grid with air: 16 px between photos (8 px on phones, the home rows
+  too); rows between about 0.85x and 1.2x the target height instead of 1x
+  to 1.5x.
+- Phones: S / L only (L is one photo per row); filters scroll away, a
+  one-line strip follows; the recipe sheet repeats the label and the photo
+  fits above it.
+- Album cards: cover, title, count and dates; the colour band and gear line
+  are gone.
+- Viewer: controls dimmed, fading after 2 s without the mouse moving.
+- "Next" album after the last row, wrapping round.
 
 ### Docker workflow
 - Build, run and test in Docker on the NAS's Debian and libvips
@@ -154,7 +166,7 @@ X-T3/X-E3 JPEGs) and is ready to be tried on the NAS with Docker Compose.
 ## Later / maybe
 
 - Film simulation pages (`/film/classic-chrome`) and per-album film summary.
-- Previous / next album links, original download (and zooming into it).
+- Original download (and zooming into it).
 - Contact-sheet album layout (no film decoration such as sprocket holes).
 - Map view (private only), search by EXIF.
 - AVIF twins; on-the-fly HLS (go-vod approach) if long videos need it.

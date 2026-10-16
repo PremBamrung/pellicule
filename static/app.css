@@ -568,6 +568,20 @@ main { padding-bottom: 120px; }
 
 .tile[hidden] { display: none; }
 
+/* ---- next album: after the last row, a hairline and a smaller card ---- */
+
+.next-album {
+  margin: clamp(72px, 9vw, 128px) var(--gutter) 0;
+  padding-top: clamp(20px, 2vw, 28px);
+  border-top: 1px solid var(--rule);
+}
+.next-album-label {
+  margin: 0 0 20px;
+  color: var(--muted);
+  font-size: 14px;
+}
+.next-album .album-card { width: min(100%, 30rem); }
+
 /* ---- empty state ----------------------------------------------------- */
 
 .empty {

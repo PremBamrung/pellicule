@@ -54,7 +54,7 @@
 
 {% if !albums.is_empty() %}
 <section class="albums albums-nested">
-  {% for album in albums %}{% include "album_card.html" %}{% endfor %}
+  {% for album in albums %}{% let eager = loop.index0 < 4 %}{% include "album_card.html" %}{% endfor %}
 </section>
 {% endif %}
 
@@ -68,4 +68,12 @@
   </section>
   {% endfor %}
 </div>
+
+{% if let Some(album) = next %}
+{# The way on to the next room. #}
+<nav class="next-album" aria-label="Next album">
+  <p class="next-album-label">Next</p>
+  {% let eager = false %}{% include "album_card.html" %}
+</nav>
+{% endif %}
 {% endblock %}
