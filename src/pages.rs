@@ -126,7 +126,7 @@ pub struct AlbumCard {
     pub summary: String,
     pub cover: Option<Tile>,
     /// A few photos spread through the album, after the cover, that the
-    /// pointer flips the cover through; empty for small albums.
+    /// card's preview crossfades through; empty for small albums.
     pub flips: Vec<Tile>,
     latest: Option<String>,
 }

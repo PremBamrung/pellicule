@@ -123,27 +123,27 @@ try {
       && [...document.querySelectorAll(".album-card")].every((c) => c.querySelector(".album-card-title") && c.querySelector(".album-card-summary"))`),
   );
   await shot("home");
-  // The pointer flips a cover through photos from the album.
-  const flip = await ev(`(() => {
+  // Resting the pointer on a cover plays a short preview; leaving brings
+  // the cover back.
+  const card = await ev(`(() => {
     const card = [...document.querySelectorAll(".album-card")].find((c) => c.querySelector(".album-flip"));
     if (!card) return null;
     card.scrollIntoView({ block: "center" });
     const box = card.querySelector(".album-cover").getBoundingClientRect();
-    return { x: box.left, y: box.top + box.height / 2, w: box.width, src: card.querySelector(".album-cover img").currentSrc };
+    return { x: box.left + box.width / 2, y: box.top + box.height / 2 };
   })()`);
-  if (flip) {
-    const move = (x) => send("Input.dispatchMouseEvent", { type: "mouseMoved", x, y: flip.y });
-    await move(flip.x + 2);
-    await sleep(300);
-    await move(flip.x + flip.w - 4);
-    await sleep(1500);
-    await move(flip.x + flip.w - 3);
-    await sleep(300);
-    const flipped = await ev(`document.elementFromPoint(${flip.x + flip.w - 3}, ${flip.y}).closest(".album-cover").querySelector("img").currentSrc`);
-    check("cover flips under the pointer", flipped && flipped !== flip.src);
+  if (card) {
+    await send("Input.dispatchMouseEvent", { type: "mouseMoved", x: card.x, y: card.y });
+    await sleep(1600);
+    check(
+      "cover preview plays while pointed at",
+      await ev(`!!document.elementFromPoint(${card.x}, ${card.y}).closest(".album-card").querySelector(".album-preview.is-shown")`),
+    );
     await send("Input.dispatchMouseEvent", { type: "mouseMoved", x: 1, y: 1 });
+    await sleep(800);
+    check("cover returns when the pointer leaves", await ev(`!document.querySelector(".album-preview.is-shown")`));
     await ev(`scrollTo(0, 0)`);
-  } else console.log("skip cover flip: no album has enough photos");
+  } else console.log("skip cover preview: no album has enough photos");
   if (rows > 1) {
     check("home photo dots", await ev(`!document.querySelector(".hero-dots").hidden`), `${rows} rows`);
     await sleep(9000);

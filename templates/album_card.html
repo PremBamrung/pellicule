@@ -7,8 +7,8 @@
          loading="{% if loop.index0 < 4 %}eager{% else %}lazy{% endif %}" decoding="async" alt="">
   </span>
   {% endif %}
-  {# Photos from through the album: app.js flips the cover through them
-     under the pointer. #}
+  {# Photos from through the album: app.js crossfades through them while
+     the card is pointed at. #}
   {% for photo in album.flips %}
   <span class="album-flip" hidden data-src="{{ photo.view_url }}" data-srcset="{{ photo.cover_srcset }}"></span>
   {% endfor %}

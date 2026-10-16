@@ -12,7 +12,7 @@ X-T3/X-E3 JPEGs) and is ready to be tried on the NAS with Docker Compose.
 |---|---|
 | Scan & index | ✅ incremental, content-keyed, crash/unmount-safe |
 | Derivatives | ✅ 3 WebP sizes + JPEG zoom size at scan time, ThumbHash, average colour |
-| Browsing | ✅ home photos, album cards (cover flip, dates), justified grid, day sections, viewer |
+| Browsing | ✅ home photos, album cards (cover preview, dates), justified grid, day sections, viewer |
 | Filters | ✅ day, camera, lens, focal range (in the browser, URL state) |
 | Library page | ✅ rescan / rebuild / cancel, live progress, history, failures |
 | Look | ✅ white by default + dark toggle, Geist, blur-up placeholders, transitions |
@@ -67,6 +67,8 @@ X-T3/X-E3 JPEGs) and is ready to be tried on the NAS with Docker Compose.
 ### Frontend pass 8
 - Home rows: one random album per row, photos spread through its timeline
   in time order; the caption always names the row's album and dates.
+- Album cards: resting the pointer plays a slow crossfade through four
+  photos, then back to the cover; covers no longer scrub under the pointer.
 
 ### Frontend pass 7
 - Album grid with air: 16 px between photos (8 px on phones, the home rows

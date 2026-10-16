@@ -69,13 +69,16 @@ in the viewer's label and the album's filters. (A band of average colours
 was tried and dropped: averages all drift to the same grey-brown, so every
 album's band looked alike.)
 
-With a mouse, moving across the cover flips it, left to right, through four
-photos spread evenly through the album's timeline (beginning, middle, end of
-a trip), the same on every visit; albums with fewer than four other photos
-don't flip. They are not shown as thumbnails: the card stays a cover and a
-title. Larger versions load when the pointer arrives and the cover
-only switches to a decoded one, so it never flashes. Touch screens keep the
-plain card.
+With a mouse, resting the pointer on a card for a moment (or focusing it
+with the keyboard) plays a short preview: a slow crossfade (1.5 s each,
+0.6 s fades) through four photos spread evenly through the album's timeline
+(beginning, middle, end of a trip), the same on every visit, then back to
+the cover; leaving the card fades back to the cover at once. Nothing moves
+unless pointed at, and the cover never scrubs under the pointer. Albums
+with fewer than four other photos have no preview. Each photo is a layer
+over the cover that loads when the pointer arrives and only fades in once
+decoded, so it never flashes. Touch screens and reduced motion keep the
+still cover.
 
 ## Filters
 

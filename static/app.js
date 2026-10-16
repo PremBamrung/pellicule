@@ -232,52 +232,72 @@ if (hero) {
   if (rows.length) load(rows[0]).then(schedule);
 }
 
-// ---- album cards: the pointer flips the cover --------------------------
+// ---- album cards: a short preview while pointed at ----------------------
 
-// Across the cover, left to right: the cover, then photos from through the
-// album. Larger versions load when the pointer arrives, and the cover only
-// switches to one that is decoded.
+// Resting the pointer on a card (or focusing it with the keyboard) plays a
+// slow crossfade through photos from through the album, then settles back
+// on the cover; leaving fades back at once. Each photo is a layer over the
+// cover that only fades in once decoded. Not on touch screens or with
+// reduced motion.
 if (matchMedia("(hover: hover) and (pointer: fine)").matches) {
+  const still = matchMedia("(prefers-reduced-motion: reduce)");
+  const REST = 400;
+  const STEP = 1500;
+  const FADE = 600;
   for (const card of document.querySelectorAll(".album-card")) {
-    const cover = card.querySelector(".album-cover img");
+    const area = card.querySelector(".album-cover");
+    const cover = area?.querySelector("img");
     const flips = [...card.querySelectorAll(".album-flip")];
     if (!cover || !flips.length) continue;
-    const frames = [
-      { src: cover.getAttribute("src"), srcset: cover.getAttribute("srcset"), ready: true },
-      ...flips.map((flip) => ({ src: flip.dataset.src, srcset: flip.dataset.srcset })),
-    ];
-    let shown = 0;
-    let wanted = 0;
-    let loading = null;
-    const preload = () => {
-      loading ??= frames.slice(1).map((frame, i) => {
-        const img = new Image();
-        img.sizes = cover.sizes;
-        img.srcset = frame.srcset;
-        img.src = frame.src;
-        img.decode().then(() => {
-          frame.ready = true;
-          if (wanted === i + 1) show(i + 1);
-        }, () => {});
-        return img;
-      });
+    const layers = flips.map((flip) => {
+      const img = document.createElement("img");
+      img.className = "album-preview";
+      img.alt = "";
+      img.decoding = "async";
+      img.sizes = cover.sizes;
+      img.dataset.src = flip.dataset.src;
+      img.dataset.srcset = flip.dataset.srcset;
+      area.append(img);
+      return img;
+    });
+
+    let run = 0;
+    let timers = [];
+    const wait = (ms) => new Promise((resolve) => timers.push(setTimeout(resolve, ms)));
+    const stop = () => {
+      run++;
+      for (const timer of timers) clearTimeout(timer);
+      timers = [];
+      for (const layer of layers) layer.classList.remove("is-shown");
     };
-    const show = (index) => {
-      wanted = index;
-      if (index === shown || !frames[index].ready) return;
-      shown = index;
-      cover.srcset = frames[index].srcset;
-      cover.src = frames[index].src;
+    const play = async () => {
+      stop();
+      if (still.matches) return;
+      const id = run;
+      for (const layer of layers) {
+        if (layer.dataset.src) {
+          layer.srcset = layer.dataset.srcset;
+          layer.src = layer.dataset.src;
+          delete layer.dataset.src;
+        }
+      }
+      await wait(REST);
+      for (const [i, layer] of layers.entries()) {
+        await layer.decode().catch(() => {});
+        if (id !== run) return;
+        layer.classList.add("is-shown");
+        // The one below goes once this one has faded in over it.
+        if (i) timers.push(setTimeout(() => layers[i - 1].classList.remove("is-shown"), FADE));
+        await wait(STEP);
+        if (id !== run) return;
+      }
+      layers.at(-1).classList.remove("is-shown");
     };
 
-    const area = cover.parentElement;
-    area.addEventListener("pointerenter", preload);
-    area.addEventListener("pointermove", (event) => {
-      const box = area.getBoundingClientRect();
-      const at = Math.floor(((event.clientX - box.left) / box.width) * frames.length);
-      show(Math.max(0, Math.min(frames.length - 1, at)));
-    });
-    card.addEventListener("pointerleave", () => show(0));
+    card.addEventListener("pointerenter", play);
+    card.addEventListener("pointerleave", stop);
+    card.addEventListener("focus", () => card.matches(":focus-visible") && play());
+    card.addEventListener("blur", stop);
   }
 }
 
