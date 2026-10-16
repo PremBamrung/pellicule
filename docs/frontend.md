@@ -149,16 +149,20 @@ lazily when the viewer opens.
 
 - **Home** — opens on a row of whole photographs, never cropped, one album
   per row: up to six random top-level albums (sub-albums included), each
-  offering eight candidates, one random photo from each eighth of its
-  timeline. Each row is the 3–5 of them, in time order, that fill the page
-  width at one height (about half the screen, less on phones); an album
-  that fits badly is left out, unless it is the first. A single album gets
+  offering twelve candidates, one random photo from each twelfth of its
+  timeline. A row of n photos takes one candidate from each of n equal
+  parts of the timeline, neighbours at least two twelfths apart, so it runs
+  from the album's beginning to its end and never shows the same moment
+  twice; of those, the combination that fills the page width at one height
+  (about half the screen, less on phones) wins. An album that fits badly is
+  left out, unless it is the first. A single album gets
   a row per third of its timeline; without albums, the photos at the root
   make the rows. The frame keeps one height, so nothing below moves when the
   next row crossfades in every 8 s; dots (named after their album) pick a
   row. It pauses on hover, focus and in background tabs, and doesn't move
   with reduced motion. Under the row: its album and dates ("Japon ·
-  6–7 Oct 2023"), or the date of the photo pointed at; a photo opens the
+  6–7 Oct 2023"), fading to the next album with the crossfade, or the date
+  of the photo pointed at; a photo opens the
   viewer on it in its album (`/a/<album>#p=<key>`). Then a line of
   library stats ("2 albums, 200 photographs, 2023–2025") and the album
   covers, most recent first.

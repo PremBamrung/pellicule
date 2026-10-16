@@ -54,6 +54,7 @@ if (hero) {
     element,
     ar: parseFloat(element.style.getPropertyValue("--ar")) || 1.5,
     row: element.dataset.row ?? "0",
+    slice: Number(element.dataset.slice) || 0,
   }));
   // The server's candidates per row (one album each), in time order.
   const candidates = new Map();
@@ -80,11 +81,14 @@ if (hero) {
       }),
     );
 
-  // Rows of whole photos at one height, close to the target: each row is
-  // the combination of its candidates (up to five, in time order) that
-  // fills the width at the height nearest the target. A row that would be
-  // too tall is held at the target and left narrower; one that fits badly
-  // is left out, unless it is the first.
+  // Rows of whole photos at one height, close to the target. For a row of
+  // n photos, its candidates (in time order) are cut into n equal parts and
+  // the row takes one from each, neighbours at least two slices apart: the
+  // row runs from the album's beginning to its end, never twice the same
+  // moment. Of those, the combination that fills the width at the height
+  // nearest the target wins. A row that would be too tall is held at the
+  // target and left narrower; one that fits badly is left out, unless it is
+  // the first.
   const split = () => {
     const width = frame.clientWidth;
     const target = Math.min(innerHeight * 0.55, width * 0.75);
@@ -99,21 +103,26 @@ if (hero) {
     const groups = [];
     for (const photos of candidates.values()) {
       let best = null;
-      const search = (from, items, ratio) => {
-        if (items.length) {
-          const cost = waste(items.length, ratio);
-          if (!best || cost < best.cost) best = { items: [...items], cost };
-          // More photos only make the row lower.
-          if (items.length === 5 || fit(items.length, ratio) < target) return;
-        }
-        for (let i = from; i < photos.length; i++) {
-          items.push(photos[i]);
-          search(i + 1, items, ratio + photos[i].ar);
-          items.pop();
-        }
-      };
-      search(0, [], 0);
-      if (groups.length && best.cost > 0.12) continue;
+      // Small albums may have too few candidates to keep a slice apart.
+      const apart = photos.length >= 9 ? 2 : 1;
+      for (let n = 1; n <= Math.min(5, photos.length); n++) {
+        const edge = (part) => Math.floor((part * photos.length) / n);
+        const search = (part, items, ratio) => {
+          if (part === n) {
+            const cost = waste(n, ratio);
+            if (!best || cost < best.cost) best = { items: [...items], cost };
+            return;
+          }
+          for (let i = edge(part); i < edge(part + 1); i++) {
+            if (items.length && photos[i].slice - items.at(-1).slice < apart) continue;
+            items.push(photos[i]);
+            search(part + 1, items, ratio + photos[i].ar);
+            items.pop();
+          }
+        };
+        search(0, [], 0);
+      }
+      if (!best || (groups.length && best.cost > 0.12)) continue;
       const items = best.items;
       groups.push({ items, height: Math.min(target, fit(items.length, items.reduce((sum, p) => sum + p.ar, 0))) });
     }
@@ -146,7 +155,7 @@ if (hero) {
         dot.setAttribute("aria-label", `${rows[i].first.dataset.album}, photos ${i + 1} of ${rows.length}`);
         dot.addEventListener("click", async () => {
           await load(rows[i]);
-          show(i);
+          show(i, true);
         });
         return dot;
       }),
@@ -155,7 +164,10 @@ if (hero) {
     show(Math.min(current, rows.length - 1));
   };
 
-  const show = (index) => {
+  // The caption fades with the row: out, the new album at the midpoint of
+  // the crossfade, back in.
+  let captionTimer = null;
+  const show = (index, fade = false) => {
     rows.forEach((row, i) => {
       const on = i === index;
       row.element.classList.toggle("is-current", on);
@@ -167,12 +179,25 @@ if (hero) {
     });
     [...dotsBox.children].forEach((dot, i) => dot.setAttribute("aria-current", String(i === index)));
     current = index;
-    caption(null);
+    clearTimeout(captionTimer);
+    if (!fade || still.matches) {
+      label.classList.remove("is-fading");
+      return caption(null);
+    }
+    label.classList.add("is-fading");
+    captionTimer = setTimeout(() => {
+      caption(null);
+      label.classList.remove("is-fading");
+    }, 700);
   };
 
   // Under the row: its album and dates, or the date of the photo pointed
   // at or focused.
   const caption = (photo) => {
+    if (photo) {
+      clearTimeout(captionTimer);
+      label.classList.remove("is-fading");
+    }
     const [link, date] = label.children;
     const shown = photo ?? rows[current]?.first;
     link.textContent = shown?.dataset.album ?? "";
@@ -191,7 +216,7 @@ if (hero) {
     timer = setTimeout(async () => {
       const next = (current + 1) % rows.length;
       await load(rows[next]);
-      if (!paused && !document.hidden) show(next);
+      if (!paused && !document.hidden) show(next, true);
       schedule();
     }, 8000);
   };

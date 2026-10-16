@@ -40,6 +40,9 @@ pub struct Hero {
     pub label: String,
     /// The row it is a candidate for: one album per row.
     pub row: usize,
+    /// Its slice of the row's timeline, from 0: app.js keeps neighbours
+    /// apart.
+    pub slice: usize,
     /// "6–7 Oct 2023": the album's dates, under its row.
     pub album_dates: String,
 }
@@ -47,8 +50,8 @@ pub struct Hero {
 /// Rows the home photos take turns in.
 const HERO_ROWS: usize = 6;
 /// Candidates per row, one from each slice of the album's timeline: enough
-/// for app.js to find 3–5 that fill a wide screen.
-const HERO_PICKS: usize = 8;
+/// for app.js to find 3–5, spread through it, that fill a wide screen.
+const HERO_PICKS: usize = 12;
 
 #[derive(Template)]
 #[template(path = "album.html")]
@@ -192,8 +195,8 @@ pub fn home<'a>(conn: &Connection, layout: &'a Layout) -> Result<HomePage<'a>> {
 
 /// The home rows, new on every visit: each row is one random top-level
 /// album (sub-albums included), its candidates one random photo from each
-/// eighth of its timeline, in time order; app.js keeps the few that fill
-/// the width. A single album gets a row per third of its timeline; without
+/// twelfth of its timeline, in time order; app.js keeps a few, spread
+/// through it, that fill the width. A single album gets a row per third of its timeline; without
 /// albums, the photos at the library root make the rows.
 fn heroes(conn: &Connection) -> Result<Vec<Hero>> {
     let Some(root) = album_by_path(conn, "")? else {
@@ -261,6 +264,7 @@ fn heroes(conn: &Connection) -> Result<Vec<Hero>> {
                 href: format!("{album_href}#p={}", tile.key),
                 label: format!("{}, {}", album.name, tile.accessible_name),
                 row: index * parts + slice / HERO_PICKS,
+                slice: slice % HERO_PICKS,
                 album_dates: dates.clone().unwrap_or_default(),
                 album_href: album_href.clone(),
                 album_title: album.name.clone(),

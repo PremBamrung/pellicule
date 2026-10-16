@@ -156,6 +156,15 @@ try {
       new Set([...row.querySelectorAll(".hero-photo")].map((p) => p.dataset.album)).size === 1)`),
   );
   check(
+    "home rows are spread through their album",
+    await ev(`[...document.querySelectorAll(".hero-row")].every((row) => {
+      const photos = [...row.querySelectorAll(".hero-photo")];
+      const candidates = document.querySelectorAll(\`.hero-photo[data-row="\${photos[0].dataset.row}"]\`).length;
+      const apart = candidates >= 9 ? 2 : 1;
+      return photos.every((p, i) => !i || p.dataset.slice - photos[i - 1].dataset.slice >= apart);
+    })`),
+  );
+  check(
     "caption names the row's album and dates",
     await ev(`(() => {
       const first = document.querySelector(".hero-row.is-current .hero-photo");

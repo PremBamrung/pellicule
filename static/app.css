@@ -188,7 +188,15 @@ main { padding-bottom: 120px; }
   font-size: 14px;
   color: var(--muted);
 }
-.hero-label { display: flex; flex-wrap: wrap; gap: 0 16px; min-width: 0; }
+.hero-label {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 16px;
+  min-width: 0;
+  transition: opacity 700ms ease;
+}
+/* Half the rows' crossfade out, half back in with the next album. */
+.hero-label.is-fading { opacity: 0; }
 .hero-label a { color: var(--ink); font-weight: 500; }
 
 .hero-dots {

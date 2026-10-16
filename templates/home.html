@@ -10,7 +10,7 @@
     {% for hero in heroes %}
     <a class="hero-photo ph" href="{{ hero.href }}" aria-label="{{ hero.label }}"
        style="--ar: {{ hero.tile.aspect }}; background-color: {{ hero.tile.background }}" data-thumbhash="{{ hero.tile.thumbhash }}"
-       data-row="{{ hero.row }}" data-album="{{ hero.album_title }}" data-album-href="{{ hero.album_href }}"
+       data-row="{{ hero.row }}" data-slice="{{ hero.slice }}" data-album="{{ hero.album_title }}" data-album-href="{{ hero.album_href }}"
        data-album-dates="{{ hero.album_dates }}" data-date="{{ hero.tile.label_date }}">
       {% if loop.index0 < 4 %}
       <img src="{{ hero.tile.view_url }}" srcset="{{ hero.tile.wide_srcset }}" sizes="50vw"
